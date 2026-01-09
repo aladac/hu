@@ -1,63 +1,39 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Default settings.toml content with all options commented out
 pub const DEFAULT_SETTINGS: &str = r#"# hu settings
-# Location: ~/Library/Application Support/hu/settings.toml (macOS)
-#           ~/.config/hu/settings.toml (Linux)
+# See settings.example.toml in the repo for full documentation
 
-# ============================================================================
-# AWS Configuration
-# ============================================================================
-
-[aws]
-# AWS profile to use (overridden by --aws-profile flag)
+# [aws]
 # profile = "default"
-
-# AWS region for EKS clusters
 # region = "us-east-1"
 
-# ============================================================================
-# Kubernetes Configuration
-# ============================================================================
-
-[kubernetes]
-# Default namespace for pod operations
+# [kubernetes]
 # namespace = "cms"
-
-# Default pod type/pattern to filter
 # pod_type = "web"
 
-# ============================================================================
-# Environment Configuration
-# ============================================================================
-
-[environments]
-# Map environment names to EKS cluster names
-# [environments.clusters]
-# prod = "prod-eks"
-# dev = "eks-dev"
-# stg = "eks-stg"
-
-# ============================================================================
-# Logging Configuration
-# ============================================================================
-
-[logging]
-# Default log file path template ({env} is replaced with environment name)
+# [logging]
 # log_path = "~/.config/hu/{env}.log"
 
-# ============================================================================
-# Display Configuration
-# ============================================================================
+# default_env = "dev"
 
-[display]
-# Environment emojis
-# [display.emojis]
-# prod = "🔴"
-# dev = "🟢"
-# stg = "🟡"
+[env.dev]
+cluster = "eks-dev"
+emoji = "🟢"
+log_name = "development"
+
+[env.stg]
+cluster = "eks-stg"
+emoji = "🟡"
+log_name = "staging"
+
+[env.prod]
+cluster = "prod-eks"
+emoji = "🔴"
+log_name = "production"
 "#;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -67,11 +43,11 @@ pub struct Settings {
     #[serde(default)]
     pub kubernetes: KubernetesSettings,
     #[serde(default)]
-    pub environments: EnvironmentSettings,
-    #[serde(default)]
     pub logging: LoggingSettings,
     #[serde(default)]
-    pub display: DisplaySettings,
+    pub default_env: Option<String>,
+    #[serde(default)]
+    pub env: HashMap<String, EnvConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -106,27 +82,59 @@ impl Default for KubernetesSettings {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct EnvironmentSettings {
-    pub clusters: ClusterMap,
+pub struct EnvConfig {
+    pub cluster: String,
+    pub emoji: String,
+    pub log_name: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ClusterMap {
-    pub prod: String,
-    pub dev: String,
-    pub stg: String,
-}
-
-impl Default for ClusterMap {
+impl Default for EnvConfig {
     fn default() -> Self {
         Self {
-            prod: "prod-eks".to_string(),
-            dev: "eks-dev".to_string(),
-            stg: "eks-stg".to_string(),
+            cluster: String::new(),
+            emoji: "⚪".to_string(),
+            log_name: None,
         }
+    }
+}
+
+impl Settings {
+    /// Get environment config, falling back to defaults for known envs
+    pub fn get_env(&self, name: &str) -> EnvConfig {
+        if let Some(config) = self.env.get(name) {
+            return config.clone();
+        }
+
+        // Default configs for known environments
+        match name {
+            "prod" => EnvConfig {
+                cluster: "prod-eks".to_string(),
+                emoji: "🔴".to_string(),
+                log_name: Some("production".to_string()),
+            },
+            "dev" => EnvConfig {
+                cluster: "eks-dev".to_string(),
+                emoji: "🟢".to_string(),
+                log_name: Some("development".to_string()),
+            },
+            "stg" => EnvConfig {
+                cluster: "eks-stg".to_string(),
+                emoji: "🟡".to_string(),
+                log_name: Some("staging".to_string()),
+            },
+            _ => EnvConfig {
+                cluster: format!("eks-{}", name),
+                emoji: "⚪".to_string(),
+                log_name: None,
+            },
+        }
+    }
+
+    /// Get the default environment name
+    pub fn default_env_name(&self) -> &str {
+        self.default_env.as_deref().unwrap_or("dev")
     }
 }
 
@@ -140,30 +148,6 @@ impl Default for LoggingSettings {
     fn default() -> Self {
         Self {
             log_path: "~/.config/hu/{env}.log".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct DisplaySettings {
-    pub emojis: EmojiMap,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default)]
-pub struct EmojiMap {
-    pub prod: String,
-    pub dev: String,
-    pub stg: String,
-}
-
-impl Default for EmojiMap {
-    fn default() -> Self {
-        Self {
-            prod: "🔴".to_string(),
-            dev: "🟢".to_string(),
-            stg: "🟡".to_string(),
         }
     }
 }
