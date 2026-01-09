@@ -45,6 +45,22 @@ bump *args:
 clean:
     cargo clean
 
+# CI tasks
+ci-fmt:
+    cargo fmt
+
+ci-lint-fix:
+    cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
+
+ci-lint-check:
+    cargo clippy -- -D warnings
+
+ci-test:
+    cargo test --verbose
+
+ci-build target:
+    cargo build --release --target {{target}}
+
 # Full release prep
 dist: lint test release
     @echo "Release ready in target/release/"

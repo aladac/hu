@@ -25,8 +25,10 @@ jobs:
         with:
           components: rustfmt
 
+      - uses: extractions/setup-just@v2
+
       - name: Run cargo fmt
-        run: cargo fmt
+        run: just ci-fmt
 
       - name: Commit formatting changes
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -53,8 +55,10 @@ jobs:
         with:
           components: clippy
 
+      - uses: extractions/setup-just@v2
+
       - name: Run clippy with auto-fix
-        run: cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
+        run: just ci-lint-fix
         continue-on-error: true
 
       - name: Commit lint fixes
@@ -64,7 +68,7 @@ jobs:
           file_pattern: "*.rs"
 
       - name: Verify no remaining warnings
-        run: cargo clippy -- -D warnings
+        run: just ci-lint-check
 
   test:
     name: Test (${{ matrix.os }})
@@ -89,5 +93,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: extractions/setup-just@v2
+
       - name: Run tests
-        run: cargo test --verbose
+        run: just ci-test
