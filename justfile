@@ -61,6 +61,15 @@ ci-test:
 ci-build target:
     cargo build --release --target {{target}}
 
+ci-install-cross-deps target:
+    ./scripts/install-cross-deps.sh {{target}}
+
+ci-package target version:
+    ./scripts/package.sh {{target}} {{version}}
+
+ci-is-prerelease tag:
+    @./scripts/is-prerelease.sh {{tag}}
+
 # Full release prep
 dist: lint test release
     @echo "Release ready in target/release/"

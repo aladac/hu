@@ -18,10 +18,7 @@ jobs:
           targets: x86_64-unknown-linux-gnu
       - uses: extractions/setup-just@v2
       - run: just ci-build x86_64-unknown-linux-gnu
-      - name: Package
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          gzip -c target/x86_64-unknown-linux-gnu/release/hu > hu-${VERSION}-linux-x86_64.gz
+      - run: just ci-package x86_64-unknown-linux-gnu ${GITHUB_REF_NAME#v}
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64
@@ -36,17 +33,11 @@ jobs:
         with:
           targets: aarch64-unknown-linux-gnu
       - uses: extractions/setup-just@v2
-      - name: Install cross-compilation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - run: just ci-install-cross-deps aarch64-unknown-linux-gnu
       - run: just ci-build aarch64-unknown-linux-gnu
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-      - name: Package
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          gzip -c target/aarch64-unknown-linux-gnu/release/hu > hu-${VERSION}-linux-arm64.gz
+      - run: just ci-package aarch64-unknown-linux-gnu ${GITHUB_REF_NAME#v}
       - uses: actions/upload-artifact@v4
         with:
           name: linux-arm64
@@ -62,10 +53,7 @@ jobs:
           targets: x86_64-apple-darwin
       - uses: extractions/setup-just@v2
       - run: just ci-build x86_64-apple-darwin
-      - name: Package
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          gzip -c target/x86_64-apple-darwin/release/hu > hu-${VERSION}-mac-x86_64.gz
+      - run: just ci-package x86_64-apple-darwin ${GITHUB_REF_NAME#v}
       - uses: actions/upload-artifact@v4
         with:
           name: mac-x86_64
@@ -81,10 +69,7 @@ jobs:
           targets: aarch64-apple-darwin
       - uses: extractions/setup-just@v2
       - run: just ci-build aarch64-apple-darwin
-      - name: Package
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          gzip -c target/aarch64-apple-darwin/release/hu > hu-${VERSION}-mac-arm64.gz
+      - run: just ci-package aarch64-apple-darwin ${GITHUB_REF_NAME#v}
       - uses: actions/upload-artifact@v4
         with:
           name: mac-arm64
@@ -100,11 +85,8 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - uses: extractions/setup-just@v2
       - run: just ci-build x86_64-pc-windows-msvc
-      - name: Package
+      - run: just ci-package x86_64-pc-windows-msvc ${GITHUB_REF_NAME#v}
         shell: bash
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          7z a hu-${VERSION}-windows-x86_64.zip ./target/x86_64-pc-windows-msvc/release/hu.exe
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x86_64
@@ -120,11 +102,8 @@ jobs:
           targets: aarch64-pc-windows-msvc
       - uses: extractions/setup-just@v2
       - run: just ci-build aarch64-pc-windows-msvc
-      - name: Package
+      - run: just ci-package aarch64-pc-windows-msvc ${GITHUB_REF_NAME#v}
         shell: bash
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          7z a hu-${VERSION}-windows-arm64.zip ./target/aarch64-pc-windows-msvc/release/hu.exe
       - uses: actions/upload-artifact@v4
         with:
           name: windows-arm64
@@ -137,20 +116,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
-
       - name: Determine if prerelease
         id: prerelease
-        run: |
-          if [[ "${{ github.ref_name }}" == *"pre"* ]] || [[ "${{ github.ref_name }}" == *"alpha"* ]] || [[ "${{ github.ref_name }}" == *"beta"* ]] || [[ "${{ github.ref_name }}" == *"rc"* ]]; then
-            echo "is_prerelease=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_prerelease=false" >> $GITHUB_OUTPUT
-          fi
-
+        run: echo "is_prerelease=$(just ci-is-prerelease ${{ github.ref_name }})" >> $GITHUB_OUTPUT
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -159,4 +133,4 @@ jobs:
             artifacts/*.zip
           generate_release_notes: true
           draft: true
-          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
