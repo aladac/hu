@@ -6,7 +6,7 @@ authors = ["Chi"]
 description = "Dev workflow CLI: EKS pods, Jira tickets, GitHub PRs, AWS pipelines"
 license = "MIT"
 repository = "https://github.com/chi/hu"
-keywords = ["kubernetes", "eks", "aws", "cli", "devops", "jira", "github"]
+keywords = ["kubernetes", "eks", "aws", "cli", "devops"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
