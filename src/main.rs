@@ -202,10 +202,15 @@ fn resolve_env(env: Option<Environment>, settings: &Settings) -> String {
         .unwrap_or_else(|| settings.default_env_name().to_string())
 }
 
-async fn ensure_aws_session(
-    profile: Option<&str>,
-    region: &str,
-) -> Result<aws_config::SdkConfig> {
+/// Resolve the effective profile: CLI flag > config profile > None
+fn resolve_profile<'a>(
+    cli_profile: Option<&'a str>,
+    config_profile: Option<&'a str>,
+) -> Option<&'a str> {
+    cli_profile.or(config_profile)
+}
+
+async fn ensure_aws_session(profile: Option<&str>, region: &str) -> Result<aws_config::SdkConfig> {
     let aws_config = aws::get_config(profile, region).await;
 
     let spin = spinner("Checking AWS SSO session...");
@@ -231,7 +236,8 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let settings = config::load_settings().context("Failed to load settings")?;
 
-    let profile = args.aws_profile.as_deref().or(settings.aws.profile.as_deref());
+    // CLI --aws-profile flag takes precedence over all config profiles
+    let cli_profile = args.aws_profile.as_deref();
 
     match args.command {
         Commands::Log {
@@ -254,6 +260,8 @@ async fn main() -> Result<()> {
         }
 
         Commands::Aws { action } => {
+            // Use general profile for AWS operations
+            let profile = resolve_profile(cli_profile, settings.aws.profiles.general_profile());
             let aws_config = ensure_aws_session(profile, &settings.aws.region).await?;
             match action {
                 AwsCommands::Whoami => aws::whoami(&aws_config).await,
@@ -273,6 +281,8 @@ async fn main() -> Result<()> {
             namespace,
             log,
         } => {
+            // Use eks profile for EKS/Kubernetes operations
+            let profile = resolve_profile(cli_profile, settings.aws.profiles.eks_profile());
             let aws_config = ensure_aws_session(profile, &settings.aws.region).await?;
 
             // Handle subcommands or default behavior
@@ -296,7 +306,17 @@ async fn main() -> Result<()> {
                         }
                     }
 
-                    commands::eks::run(&aws_config, &settings, &env_name, profile, &ns, &pt, None, None).await
+                    commands::eks::run(
+                        &aws_config,
+                        &settings,
+                        &env_name,
+                        profile,
+                        &ns,
+                        &pt,
+                        None,
+                        None,
+                    )
+                    .await
                 }
 
                 Some(EksCommands::Exec {
@@ -313,7 +333,17 @@ async fn main() -> Result<()> {
                         .or(pod_type)
                         .unwrap_or_else(|| settings.kubernetes.pod_type.clone());
 
-                    commands::eks::run(&aws_config, &settings, &env_name, profile, &ns, &pt, Some(pod_num), None).await
+                    commands::eks::run(
+                        &aws_config,
+                        &settings,
+                        &env_name,
+                        profile,
+                        &ns,
+                        &pt,
+                        Some(pod_num),
+                        None,
+                    )
+                    .await
                 }
 
                 Some(EksCommands::Logs {
@@ -331,12 +361,24 @@ async fn main() -> Result<()> {
                         .unwrap_or_else(|| settings.kubernetes.pod_type.clone());
 
                     let env_config = settings.get_env(&env_name);
-                    let log_name = env_config.log_name.clone().unwrap_or_else(|| env_name.clone());
-                    let log_path = path.unwrap_or_else(|| {
-                        settings.logging.log_path.replace("{env}", &log_name)
-                    });
+                    let log_name = env_config
+                        .log_name
+                        .clone()
+                        .unwrap_or_else(|| env_name.clone());
+                    let log_path = path
+                        .unwrap_or_else(|| settings.logging.log_path.replace("{env}", &log_name));
 
-                    commands::eks::run(&aws_config, &settings, &env_name, profile, &ns, &pt, None, Some(log_path)).await
+                    commands::eks::run(
+                        &aws_config,
+                        &settings,
+                        &env_name,
+                        profile,
+                        &ns,
+                        &pt,
+                        None,
+                        Some(log_path),
+                    )
+                    .await
                 }
 
                 None => {
@@ -362,7 +404,17 @@ async fn main() -> Result<()> {
                         None => None,
                     };
 
-                    commands::eks::run(&aws_config, &settings, &env_name, profile, &ns, &pt, pod, log_file).await
+                    commands::eks::run(
+                        &aws_config,
+                        &settings,
+                        &env_name,
+                        profile,
+                        &ns,
+                        &pt,
+                        pod,
+                        log_file,
+                    )
+                    .await
                 }
             }
         }

@@ -35,7 +35,10 @@ pub fn view(
         bail!("Log file not found: {:?}", path);
     }
 
-    print_header(&format!("Log: {}", path.display().to_string().bright_cyan()));
+    print_header(&format!(
+        "Log: {}",
+        path.display().to_string().bright_cyan()
+    ));
 
     if follow {
         println!("  {} to stop", "Press Ctrl+C".yellow());
@@ -54,7 +57,7 @@ pub fn view(
         // First show last N lines
         let file = std::fs::File::open(&path)?;
         let reader = BufReader::new(file);
-        let all_lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+        let all_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
         let start = all_lines.len().saturating_sub(lines);
 
         for line in &all_lines[start..] {
@@ -77,25 +80,25 @@ pub fn view(
         while running.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(100));
 
-            let current_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(last_size);
+            let current_size = std::fs::metadata(&path)
+                .map(|m| m.len())
+                .unwrap_or(last_size);
 
             if current_size > last_pos {
                 let file = std::fs::File::open(&path)?;
                 let mut reader = BufReader::new(file);
                 std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(last_pos))?;
 
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        if let Some(pattern) = grep {
-                            if !line.contains(pattern) {
-                                continue;
-                            }
+                for line in reader.lines().map_while(Result::ok) {
+                    if let Some(pattern) = grep {
+                        if !line.contains(pattern) {
+                            continue;
                         }
-                        if colorize {
-                            println!("{}", colorize_log_line(&line));
-                        } else {
-                            println!("{}", line);
-                        }
+                    }
+                    if colorize {
+                        println!("{}", colorize_log_line(&line));
+                    } else {
+                        println!("{}", line);
                     }
                 }
 
@@ -110,7 +113,7 @@ pub fn view(
         // Just show last N lines
         let file = std::fs::File::open(&path)?;
         let reader = BufReader::new(file);
-        let all_lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+        let all_lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
         let start = all_lines.len().saturating_sub(lines);
 
         for line in &all_lines[start..] {

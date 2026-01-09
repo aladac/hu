@@ -16,7 +16,7 @@ pub fn run_cmd(cmd: &[&str]) -> Option<String> {
 
 pub fn expand_tilde(path: &str) -> String {
     if path.starts_with("~/") {
-        if let Some(home) = std::env::var("HOME").ok() {
+        if let Ok(home) = std::env::var("HOME") {
             return path.replacen("~", &home, 1);
         }
     }

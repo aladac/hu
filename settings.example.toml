@@ -12,12 +12,21 @@
 # ============================================================================
 
 [aws]
-# AWS profile to use for all operations (SSO login, EKS access, etc.)
-# Can be overridden with --aws-profile flag
-# profile = "default"
-
 # AWS region for EKS clusters
 # region = "us-east-1"
+
+# AWS profiles for different services
+# Each profile maps to an AWS CLI profile configured in ~/.aws/config
+# The --aws-profile flag overrides these for any command
+[aws.profiles]
+# Profile for EKS/Kubernetes operations (pod listing, exec, log tailing, kubeconfig updates)
+# eks = "eks"
+
+# Profile for general AWS operations (whoami, login, etc.)
+# general = "aws"
+
+# Profile for EC2 operations (future)
+# ec2 = "ec2"
 
 # ============================================================================
 # Kubernetes Configuration  

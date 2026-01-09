@@ -74,9 +74,17 @@ struct ExecConfig {
     args: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     env: Option<Vec<HashMap<String, String>>>,
-    #[serde(rename = "interactiveMode", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "interactiveMode",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     interactive_mode: Option<String>,
-    #[serde(rename = "provideClusterInfo", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "provideClusterInfo",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     provide_cluster_info: Option<bool>,
 }
 
@@ -410,6 +418,7 @@ pub fn tail_logs(pods: &[String], namespace: &str, log_file: &str) -> Result<()>
 
 // ==================== Main EKS Command ====================
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     aws_config: &aws_config::SdkConfig,
     settings: &Settings,

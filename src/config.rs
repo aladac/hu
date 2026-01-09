@@ -7,9 +7,18 @@ use std::path::PathBuf;
 pub const DEFAULT_SETTINGS: &str = r#"# hu settings
 # See settings.example.toml in the repo for full documentation
 
-# [aws]
-# profile = "default"
-# region = "us-east-1"
+[aws]
+region = "us-east-1"
+
+# AWS profiles for different services
+# Each profile is used for specific operations:
+#   eks     - EKS/Kubernetes operations (pod listing, exec, log tailing)
+#   general - General AWS operations (whoami, login)
+#   ec2     - EC2 operations (future)
+[aws.profiles]
+eks = "eks"
+general = "aws"
+ec2 = "ec2"
 
 # [kubernetes]
 # namespace = "cms"
@@ -53,16 +62,55 @@ pub struct Settings {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AwsSettings {
-    pub profile: Option<String>,
     pub region: String,
+    pub profiles: AwsProfiles,
 }
 
 impl Default for AwsSettings {
     fn default() -> Self {
         Self {
-            profile: None,
             region: "us-east-1".to_string(),
+            profiles: AwsProfiles::default(),
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AwsProfiles {
+    /// Profile for EKS/Kubernetes operations
+    pub eks: Option<String>,
+    /// Profile for general AWS operations (whoami, etc.)
+    pub general: Option<String>,
+    /// Profile for EC2 operations
+    pub ec2: Option<String>,
+}
+
+impl Default for AwsProfiles {
+    fn default() -> Self {
+        Self {
+            eks: Some("eks".to_string()),
+            general: Some("aws".to_string()),
+            ec2: Some("ec2".to_string()),
+        }
+    }
+}
+
+impl AwsProfiles {
+    /// Get profile for EKS operations
+    pub fn eks_profile(&self) -> Option<&str> {
+        self.eks.as_deref()
+    }
+
+    /// Get profile for general AWS operations
+    pub fn general_profile(&self) -> Option<&str> {
+        self.general.as_deref()
+    }
+
+    /// Get profile for EC2 operations (future use)
+    #[allow(dead_code)]
+    pub fn ec2_profile(&self) -> Option<&str> {
+        self.ec2.as_deref()
     }
 }
 
