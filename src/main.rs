@@ -1,8 +1,11 @@
+mod config;
+
 use anyhow::{bail, Context, Result};
 use aws_sdk_eks::types::Cluster;
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use config::Settings;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,19 +25,19 @@ enum Environment {
 }
 
 impl Environment {
-    fn cluster(&self) -> &'static str {
+    fn cluster<'a>(&self, settings: &'a Settings) -> &'a str {
         match self {
-            Environment::Prod => "prod-eks",
-            Environment::Dev => "eks-dev",
-            Environment::Stg => "eks-stg",
+            Environment::Prod => &settings.environments.clusters.prod,
+            Environment::Dev => &settings.environments.clusters.dev,
+            Environment::Stg => &settings.environments.clusters.stg,
         }
     }
 
-    fn emoji(&self) -> &'static str {
+    fn emoji<'a>(&self, settings: &'a Settings) -> &'a str {
         match self {
-            Environment::Prod => "🔴",
-            Environment::Dev => "🟢",
-            Environment::Stg => "🟡",
+            Environment::Prod => &settings.display.emojis.prod,
+            Environment::Dev => &settings.display.emojis.dev,
+            Environment::Stg => &settings.display.emojis.stg,
         }
     }
 
@@ -71,23 +74,24 @@ impl std::fmt::Display for Environment {
     hu -e prod -t api                      \x1b[2m# List api pods on prod\x1b[0m
     hu --log                               \x1b[2m# Tail default log\x1b[0m
     hu -l /app/log/sidekiq.log             \x1b[2m# Tail custom log\x1b[0m
-    hu --whoami                            \x1b[2m# Show AWS identity and permissions\x1b[0m")]
+    hu --whoami                            \x1b[2m# Show AWS identity and permissions\x1b[0m
+    hu --aws-profile hu                    \x1b[2m# Use specific AWS profile\x1b[0m")]
 struct Args {
     /// Environment (auto-detects if omitted)
     #[arg(short, long, value_enum)]
     env: Option<Environment>,
 
     /// Pod name pattern to filter
-    #[arg(short = 't', long = "type", default_value = "web")]
-    pod_type: String,
+    #[arg(short = 't', long = "type")]
+    pod_type: Option<String>,
 
     /// Pod number to connect to
     #[arg(short, long)]
     pod: Option<usize>,
 
     /// Kubernetes namespace
-    #[arg(short, long, default_value = "cms")]
-    namespace: String,
+    #[arg(short, long)]
+    namespace: Option<String>,
 
     /// Tail log file from all pods (default: /app/log/<env>.log)
     #[arg(short, long)]
@@ -96,6 +100,10 @@ struct Args {
     /// Show AWS identity and permissions
     #[arg(long)]
     whoami: bool,
+
+    /// AWS profile to use
+    #[arg(long = "aws-profile")]
+    aws_profile: Option<String>,
 }
 
 const ANSI_COLORS: [&str; 6] = ["red", "green", "yellow", "blue", "magenta", "cyan"];
@@ -122,13 +130,15 @@ fn detect_env() -> Option<Environment> {
     }
 }
 
-const AWS_REGION: &str = "us-east-1";
+async fn get_aws_config(profile: Option<&str>, region: &str) -> aws_config::SdkConfig {
+    let mut builder = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(aws_config::Region::new(region.to_string()));
 
-async fn get_aws_config() -> aws_config::SdkConfig {
-    aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_config::Region::new(AWS_REGION))
-        .load()
-        .await
+    if let Some(profile_name) = profile {
+        builder = builder.profile_name(profile_name);
+    }
+
+    builder.load().await
 }
 
 async fn check_aws_session(config: &aws_config::SdkConfig) -> bool {
@@ -136,11 +146,15 @@ async fn check_aws_session(config: &aws_config::SdkConfig) -> bool {
     client.get_caller_identity().send().await.is_ok()
 }
 
-fn aws_sso_login() -> Result<()> {
-    let status = Command::new("aws")
-        .args(["sso", "login"])
-        .status()
-        .context("Failed to run aws sso login")?;
+fn aws_sso_login(profile: Option<&str>) -> Result<()> {
+    let mut cmd = Command::new("aws");
+    cmd.args(["sso", "login"]);
+
+    if let Some(profile_name) = profile {
+        cmd.args(["--profile", profile_name]);
+    }
+
+    let status = cmd.status().context("Failed to run aws sso login")?;
 
     if status.success() {
         Ok(())
@@ -761,7 +775,12 @@ fn save_kubeconfig(config: &Kubeconfig) -> Result<()> {
     Ok(())
 }
 
-async fn update_kubeconfig(config: &aws_config::SdkConfig, cluster_name: &str) -> Result<()> {
+async fn update_kubeconfig(
+    config: &aws_config::SdkConfig,
+    cluster_name: &str,
+    profile: Option<&str>,
+    region: &str,
+) -> Result<()> {
     let cluster = get_cluster_info(config, cluster_name).await?;
 
     let endpoint = cluster.endpoint().context("Cluster has no endpoint")?;
@@ -789,22 +808,29 @@ async fn update_kubeconfig(config: &aws_config::SdkConfig, cluster_name: &str) -
     }
 
     // Update or add user with exec-based auth
+    let mut exec_args = vec![
+        "--region".to_string(),
+        region.to_string(),
+        "eks".to_string(),
+        "get-token".to_string(),
+        "--cluster-name".to_string(),
+        cluster_name.to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ];
+
+    if let Some(profile_name) = profile {
+        exec_args.push("--profile".to_string());
+        exec_args.push(profile_name.to_string());
+    }
+
     let user_entry = KubeconfigUser {
         name: arn.to_string(),
         user: UserData {
             exec: ExecConfig {
                 api_version: "client.authentication.k8s.io/v1beta1".to_string(),
                 command: "aws".to_string(),
-                args: vec![
-                    "--region".to_string(),
-                    AWS_REGION.to_string(),
-                    "eks".to_string(),
-                    "get-token".to_string(),
-                    "--cluster-name".to_string(),
-                    cluster_name.to_string(),
-                    "--output".to_string(),
-                    "json".to_string(),
-                ],
+                args: exec_args,
                 env: None,
                 interactive_mode: Some("Never".to_string()),
                 provide_cluster_info: None,
@@ -876,7 +902,7 @@ fn print_error(text: &str) {
     eprintln!("{} {}", "✗".red(), text);
 }
 
-fn display_pods(pods: &[String], env: Environment) {
+fn display_pods(pods: &[String], env: Environment, settings: &Settings) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -901,7 +927,7 @@ fn display_pods(pods: &[String], env: Environment) {
         "{}",
         format!(
             "{} Matching Pods ({})",
-            env.emoji(),
+            env.emoji(settings),
             env.as_str().to_uppercase()
         )
         .bold()
@@ -916,9 +942,10 @@ fn exec_into_pod(
     env: Environment,
     pod_type: &str,
     pod_num: usize,
+    settings: &Settings,
 ) -> Result<()> {
     let prompt_label = format!("{}-{}-{}", env.as_str(), pod_type, pod_num);
-    let env_emoji = env.emoji();
+    let env_emoji = env.emoji(settings);
 
     print_header(&format!("Connecting to {}", pod.bright_cyan()));
     println!(
@@ -1068,17 +1095,32 @@ fn show_spinner(message: &str) -> ProgressBar {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    // Load settings from config file
+    let settings = config::load_settings().context("Failed to load settings")?;
+
+    // CLI args override config file, config file overrides defaults
+    let profile = args.aws_profile.as_deref().or(settings.aws.profile.as_deref());
+    let region = &settings.aws.region;
+    let namespace = args
+        .namespace
+        .as_deref()
+        .unwrap_or(&settings.kubernetes.namespace);
+    let pod_type = args
+        .pod_type
+        .as_deref()
+        .unwrap_or(&settings.kubernetes.pod_type);
+
     // Load AWS config (needed for all AWS operations)
-    let aws_config = get_aws_config().await;
+    let aws_config = get_aws_config(profile, region).await;
 
     // Check AWS session
     let spinner = show_spinner("Checking AWS SSO session...");
     if !check_aws_session(&aws_config).await {
         spinner.finish_and_clear();
         print_warning("SSO session expired. Logging in...");
-        aws_sso_login()?;
+        aws_sso_login(profile)?;
         // Reload config after login
-        let aws_config = get_aws_config().await;
+        let aws_config = get_aws_config(profile, region).await;
         if !check_aws_session(&aws_config).await {
             print_error("AWS session still invalid after login");
             std::process::exit(1);
@@ -1111,40 +1153,40 @@ async fn main() -> Result<()> {
         }
     };
 
-    let cluster = env.cluster();
+    let cluster = env.cluster(&settings);
 
     // Resolve log file path
     let log_file = match &args.log {
         Some(Some(path)) => Some(path.clone()),
-        Some(None) => Some(format!("/app/log/{}.log", env.long_name())),
+        Some(None) => Some(settings.logging.log_path.replace("{env}", env.long_name())),
         None => None,
     };
 
     // Update kubeconfig
     let spinner = show_spinner(&format!("Updating kubeconfig for {}...", cluster));
-    update_kubeconfig(&aws_config, cluster).await?;
+    update_kubeconfig(&aws_config, cluster, profile, region).await?;
     spinner.finish_and_clear();
     print_success(&format!("Connected to {}", cluster.bold()));
 
     // Get pods
     let spinner = show_spinner(&format!(
         "Fetching pods matching '{}' in namespace '{}'...",
-        args.pod_type, args.namespace
+        pod_type, namespace
     ));
-    let pods = get_pods(&args.namespace, &args.pod_type);
+    let pods = get_pods(namespace, pod_type);
     spinner.finish_and_clear();
 
     if pods.is_empty() {
-        print_error(&format!("No pods found matching '{}'", args.pod_type));
+        print_error(&format!("No pods found matching '{}'", pod_type));
         std::process::exit(1);
     }
 
     print_success(&format!("Found {} pods", pods.len()));
-    display_pods(&pods, env);
+    display_pods(&pods, env, &settings);
 
     // Log mode - tail from all pods
     if let Some(log_path) = log_file {
-        return tail_logs(&pods, &args.namespace, &log_path);
+        return tail_logs(&pods, namespace, &log_path);
     }
 
     // No pod specified - show hint and exit
@@ -1177,5 +1219,5 @@ async fn main() -> Result<()> {
 
     // Connect to pod
     let pod = &pods[pod_num - 1];
-    exec_into_pod(pod, &args.namespace, env, &args.pod_type, pod_num)
+    exec_into_pod(pod, namespace, env, pod_type, pod_num, &settings)
 }
