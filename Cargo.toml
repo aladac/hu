@@ -1,6 +1,6 @@
 [package]
 name = "hu"
-version = "0.1.0-pre5"
+version = "0.1.0-pre6"
 edition = "2021"
 authors = ["Chi"]
 description = "Dev workflow CLI: EKS pods, Jira tickets, GitHub PRs, AWS pipelines"
@@ -44,6 +44,12 @@ dirs = "5"
 
 # Signal handling
 ctrlc = "3"
+
+# OAuth 2.0 / Jira
+oauth2 = "4"
+reqwest = { version = "0.12", features = ["json"] }
+open = "5"
+url = "2"
 
 [dev-dependencies]
 assert_cmd = "2"
