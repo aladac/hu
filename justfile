@@ -1,4 +1,4 @@
-# EKS Shell
+# hu
 
 default:
     @just --list
@@ -48,7 +48,7 @@ clean:
 # Full release prep
 dist: lint test release
     @echo "Release ready in target/release/"
-    @ls -lh target/release/eks-shell
+    @ls -lh target/release/hu
 
 # Watch for changes and rebuild
 watch:

@@ -57,16 +57,16 @@ impl std::fmt::Display for Environment {
     }
 }
 
-/// EKS Shell - Connect to Kubernetes pods easily
+/// hu - Dev workflow CLI for EKS pods, Jira, GitHub, and AWS
 #[derive(Parser, Debug)]
-#[command(name = "eks-shell")]
+#[command(name = "hu")]
 #[command(author, version, about, long_about = None)]
 #[command(after_help = "\x1b[2mExamples:\x1b[0m
-    eks-shell                              \x1b[2m# List web pods\x1b[0m
-    eks-shell --pod 1                      \x1b[2m# Connect to pod #1\x1b[0m
-    eks-shell -e prod -t api               \x1b[2m# List api pods on prod\x1b[0m
-    eks-shell --log                        \x1b[2m# Tail default log\x1b[0m
-    eks-shell -l /app/log/sidekiq.log      \x1b[2m# Tail custom log\x1b[0m")]
+    hu                                     \x1b[2m# List web pods\x1b[0m
+    hu --pod 1                             \x1b[2m# Connect to pod #1\x1b[0m
+    hu -e prod -t api                      \x1b[2m# List api pods on prod\x1b[0m
+    hu --log                               \x1b[2m# Tail default log\x1b[0m
+    hu -l /app/log/sidekiq.log             \x1b[2m# Tail custom log\x1b[0m")]
 struct Args {
     /// Environment (auto-detects if omitted)
     #[arg(short, long, value_enum)]

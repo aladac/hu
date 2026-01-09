@@ -1,12 +1,12 @@
 [package]
-name = "eks-shell"
+name = "hu"
 version = "0.1.0"
 edition = "2021"
 authors = ["Chi"]
-description = "CLI tool for connecting to Kubernetes pods on AWS EKS clusters"
+description = "Dev workflow CLI: EKS pods, Jira tickets, GitHub PRs, AWS pipelines"
 license = "MIT"
-repository = "https://github.com/chi/eks-shell"
-keywords = ["kubernetes", "eks", "aws", "cli", "devops"]
+repository = "https://github.com/chi/hu"
+keywords = ["kubernetes", "eks", "aws", "cli", "devops", "jira", "github"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
