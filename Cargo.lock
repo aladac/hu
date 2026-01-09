@@ -205,6 +205,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-iam"
+version = "1.101.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb009c802912bebb8219867878cec190eaa96cf1a011f205b960d09426e6ede8"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-query",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "fastrand",
+ "http 0.2.12",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-sso"
 version = "1.91.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1075,6 +1098,7 @@ dependencies = [
  "assert_cmd",
  "aws-config",
  "aws-sdk-eks",
+ "aws-sdk-iam",
  "aws-sdk-sts",
  "clap",
  "colored",
@@ -1084,10 +1108,12 @@ dependencies = [
  "indicatif",
  "predicates",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tempfile",
  "thiserror",
  "tokio",
+ "urlencoding",
 ]
 
 [[package]]
@@ -1863,6 +1889,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.149"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+dependencies = [
+ "itoa",
+ "memchr",
+ "serde",
+ "serde_core",
+ "zmij",
 ]
 
 [[package]]
@@ -2655,3 +2694,9 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zmij"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc5a66a20078bf1251bde995aa2fdcc4b800c70b5d92dd2c62abc5c60f679f8"

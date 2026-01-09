@@ -30,10 +30,13 @@ thiserror = "1"
 aws-config = "1"
 aws-sdk-sts = "1"
 aws-sdk-eks = "1"
+aws-sdk-iam = "1"
 
-# Serialization (for kubeconfig)
+# Serialization (for kubeconfig and IAM policies)
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde_yaml = "0.9"
+urlencoding = "2"
 
 # Signal handling
 ctrlc = "3"

@@ -70,7 +70,8 @@ impl std::fmt::Display for Environment {
     hu --pod 1                             \x1b[2m# Connect to pod #1\x1b[0m
     hu -e prod -t api                      \x1b[2m# List api pods on prod\x1b[0m
     hu --log                               \x1b[2m# Tail default log\x1b[0m
-    hu -l /app/log/sidekiq.log             \x1b[2m# Tail custom log\x1b[0m")]
+    hu -l /app/log/sidekiq.log             \x1b[2m# Tail custom log\x1b[0m
+    hu --whoami                            \x1b[2m# Show AWS identity and permissions\x1b[0m")]
 struct Args {
     /// Environment (auto-detects if omitted)
     #[arg(short, long, value_enum)]
@@ -91,6 +92,10 @@ struct Args {
     /// Tail log file from all pods (default: /app/log/<env>.log)
     #[arg(short, long)]
     log: Option<Option<String>>,
+
+    /// Show AWS identity and permissions
+    #[arg(long)]
+    whoami: bool,
 }
 
 const ANSI_COLORS: [&str; 6] = ["red", "green", "yellow", "blue", "magenta", "cyan"];
@@ -143,6 +148,491 @@ fn aws_sso_login() -> Result<()> {
         bail!("AWS SSO login failed")
     }
 }
+
+// ==================== AWS Identity & Permissions ====================
+
+#[derive(Debug)]
+enum IdentityType {
+    User(String),        // username
+    AssumedRole(String), // role name
+    FederatedUser(String),
+    Unknown,
+}
+
+#[derive(Debug)]
+struct IdentityInfo {
+    account: String,
+    arn: String,
+    identity_type: IdentityType,
+}
+
+#[derive(Debug)]
+enum PolicyType {
+    AwsManaged,
+    CustomerManaged,
+    Inline,
+}
+
+#[derive(Debug)]
+struct PolicyInfo {
+    name: String,
+    policy_type: PolicyType,
+    statements: Vec<PolicyStatement>,
+}
+
+#[derive(Debug, Default)]
+struct PolicyStatement {
+    effect: String,
+    actions: Vec<String>,
+    resources: Vec<String>,
+    conditions: Option<String>,
+}
+
+impl IdentityInfo {
+    fn from_arn(arn: &str, account: &str) -> Self {
+        let identity_type = if arn.contains(":user/") {
+            let name = arn.split(":user/").last().unwrap_or("unknown").to_string();
+            IdentityType::User(name)
+        } else if arn.contains(":assumed-role/") {
+            // ARN format: arn:aws:sts::ACCOUNT:assumed-role/ROLE-NAME/SESSION
+            let parts: Vec<&str> = arn
+                .split(":assumed-role/")
+                .last()
+                .unwrap_or("")
+                .split('/')
+                .collect();
+            let role_name = parts.first().unwrap_or(&"unknown").to_string();
+            IdentityType::AssumedRole(role_name)
+        } else if arn.contains(":federated-user/") {
+            let name = arn
+                .split(":federated-user/")
+                .last()
+                .unwrap_or("unknown")
+                .to_string();
+            IdentityType::FederatedUser(name)
+        } else {
+            IdentityType::Unknown
+        };
+
+        Self {
+            account: account.to_string(),
+            arn: arn.to_string(),
+            identity_type,
+        }
+    }
+
+    fn type_name(&self) -> &str {
+        match &self.identity_type {
+            IdentityType::User(_) => "IAM User",
+            IdentityType::AssumedRole(_) => "Assumed Role",
+            IdentityType::FederatedUser(_) => "Federated User",
+            IdentityType::Unknown => "Unknown",
+        }
+    }
+
+    fn name(&self) -> &str {
+        match &self.identity_type {
+            IdentityType::User(n) => n,
+            IdentityType::AssumedRole(n) => n,
+            IdentityType::FederatedUser(n) => n,
+            IdentityType::Unknown => "unknown",
+        }
+    }
+}
+
+async fn get_identity_info(config: &aws_config::SdkConfig) -> Result<IdentityInfo> {
+    let sts = aws_sdk_sts::Client::new(config);
+    let identity = sts
+        .get_caller_identity()
+        .send()
+        .await
+        .context("Failed to get caller identity")?;
+
+    let arn = identity.arn().context("No ARN in identity response")?;
+    let account = identity
+        .account()
+        .context("No account in identity response")?;
+
+    Ok(IdentityInfo::from_arn(arn, account))
+}
+
+fn parse_policy_document(doc: &str) -> Vec<PolicyStatement> {
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(doc);
+    let Ok(json) = parsed else {
+        return vec![];
+    };
+
+    let statements = match json.get("Statement") {
+        Some(serde_json::Value::Array(arr)) => arr.clone(),
+        Some(stmt) => vec![stmt.clone()],
+        None => return vec![],
+    };
+
+    statements
+        .iter()
+        .map(|stmt| {
+            let effect = stmt
+                .get("Effect")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Allow")
+                .to_string();
+
+            let actions = match stmt.get("Action") {
+                Some(serde_json::Value::Array(arr)) => arr
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect(),
+                Some(serde_json::Value::String(s)) => vec![s.clone()],
+                _ => vec![],
+            };
+
+            let resources = match stmt.get("Resource") {
+                Some(serde_json::Value::Array(arr)) => arr
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect(),
+                Some(serde_json::Value::String(s)) => vec![s.clone()],
+                _ => vec![],
+            };
+
+            let conditions = stmt
+                .get("Condition")
+                .map(|c| serde_json::to_string_pretty(c).unwrap_or_else(|_| "{}".to_string()));
+
+            PolicyStatement {
+                effect,
+                actions,
+                resources,
+                conditions,
+            }
+        })
+        .collect()
+}
+
+async fn get_managed_policy_document(
+    iam: &aws_sdk_iam::Client,
+    policy_arn: &str,
+) -> Result<Vec<PolicyStatement>> {
+    let policy = iam
+        .get_policy()
+        .policy_arn(policy_arn)
+        .send()
+        .await
+        .context("Failed to get policy")?;
+
+    let version_id = policy
+        .policy()
+        .and_then(|p| p.default_version_id())
+        .context("No default version ID")?;
+
+    let version = iam
+        .get_policy_version()
+        .policy_arn(policy_arn)
+        .version_id(version_id)
+        .send()
+        .await
+        .context("Failed to get policy version")?;
+
+    let document = version
+        .policy_version()
+        .and_then(|v| v.document())
+        .context("No policy document")?;
+
+    // Policy documents are URL-encoded
+    let decoded = urlencoding::decode(document).unwrap_or_else(|_| document.into());
+
+    Ok(parse_policy_document(&decoded))
+}
+
+async fn get_role_policies(iam: &aws_sdk_iam::Client, role_name: &str) -> Result<Vec<PolicyInfo>> {
+    let mut policies = Vec::new();
+
+    // Get attached managed policies
+    let attached = iam
+        .list_attached_role_policies()
+        .role_name(role_name)
+        .send()
+        .await
+        .context("Failed to list attached role policies")?;
+
+    for policy in attached.attached_policies() {
+        let name = policy.policy_name().unwrap_or("Unknown");
+        let arn = policy.policy_arn().unwrap_or("");
+
+        let policy_type = if arn.contains(":aws:policy/") {
+            PolicyType::AwsManaged
+        } else {
+            PolicyType::CustomerManaged
+        };
+
+        let statements = get_managed_policy_document(iam, arn)
+            .await
+            .unwrap_or_default();
+
+        policies.push(PolicyInfo {
+            name: name.to_string(),
+            policy_type,
+            statements,
+        });
+    }
+
+    // Get inline policies
+    let inline = iam
+        .list_role_policies()
+        .role_name(role_name)
+        .send()
+        .await
+        .context("Failed to list inline role policies")?;
+
+    for policy_name in inline.policy_names() {
+        let policy_doc = iam
+            .get_role_policy()
+            .role_name(role_name)
+            .policy_name(policy_name)
+            .send()
+            .await;
+
+        if let Ok(doc) = policy_doc {
+            let document = doc.policy_document();
+            let decoded = urlencoding::decode(document).unwrap_or_else(|_| document.into());
+            let statements = parse_policy_document(&decoded);
+
+            policies.push(PolicyInfo {
+                name: policy_name.to_string(),
+                policy_type: PolicyType::Inline,
+                statements,
+            });
+        }
+    }
+
+    Ok(policies)
+}
+
+async fn get_user_policies(iam: &aws_sdk_iam::Client, user_name: &str) -> Result<Vec<PolicyInfo>> {
+    let mut policies = Vec::new();
+
+    // Get attached managed policies
+    let attached = iam
+        .list_attached_user_policies()
+        .user_name(user_name)
+        .send()
+        .await
+        .context("Failed to list attached user policies")?;
+
+    for policy in attached.attached_policies() {
+        let name = policy.policy_name().unwrap_or("Unknown");
+        let arn = policy.policy_arn().unwrap_or("");
+
+        let policy_type = if arn.contains(":aws:policy/") {
+            PolicyType::AwsManaged
+        } else {
+            PolicyType::CustomerManaged
+        };
+
+        let statements = get_managed_policy_document(iam, arn)
+            .await
+            .unwrap_or_default();
+
+        policies.push(PolicyInfo {
+            name: name.to_string(),
+            policy_type,
+            statements,
+        });
+    }
+
+    // Get inline policies
+    let inline = iam
+        .list_user_policies()
+        .user_name(user_name)
+        .send()
+        .await
+        .context("Failed to list inline user policies")?;
+
+    for policy_name in inline.policy_names() {
+        let policy_doc = iam
+            .get_user_policy()
+            .user_name(user_name)
+            .policy_name(policy_name)
+            .send()
+            .await;
+
+        if let Ok(doc) = policy_doc {
+            let document = doc.policy_document();
+            let decoded = urlencoding::decode(document).unwrap_or_else(|_| document.into());
+            let statements = parse_policy_document(&decoded);
+
+            policies.push(PolicyInfo {
+                name: policy_name.to_string(),
+                policy_type: PolicyType::Inline,
+                statements,
+            });
+        }
+    }
+
+    // Get group policies
+    let groups = iam
+        .list_groups_for_user()
+        .user_name(user_name)
+        .send()
+        .await
+        .ok();
+
+    if let Some(groups) = groups {
+        for group in groups.groups() {
+            let group_name = group.group_name();
+
+            // Attached group policies
+            if let Ok(attached) = iam
+                .list_attached_group_policies()
+                .group_name(group_name)
+                .send()
+                .await
+            {
+                for policy in attached.attached_policies() {
+                    let name = policy.policy_name().unwrap_or("Unknown");
+                    let arn = policy.policy_arn().unwrap_or("");
+
+                    let policy_type = if arn.contains(":aws:policy/") {
+                        PolicyType::AwsManaged
+                    } else {
+                        PolicyType::CustomerManaged
+                    };
+
+                    let statements = get_managed_policy_document(iam, arn)
+                        .await
+                        .unwrap_or_default();
+
+                    policies.push(PolicyInfo {
+                        name: format!("{} (via group {})", name, group_name),
+                        policy_type,
+                        statements,
+                    });
+                }
+            }
+
+            // Inline group policies
+            if let Ok(inline) = iam
+                .list_group_policies()
+                .group_name(group_name)
+                .send()
+                .await
+            {
+                for policy_name in inline.policy_names() {
+                    if let Ok(doc) = iam
+                        .get_group_policy()
+                        .group_name(group_name)
+                        .policy_name(policy_name)
+                        .send()
+                        .await
+                    {
+                        let document = doc.policy_document();
+                        let decoded =
+                            urlencoding::decode(document).unwrap_or_else(|_| document.into());
+                        let statements = parse_policy_document(&decoded);
+
+                        policies.push(PolicyInfo {
+                            name: format!("{} (via group {})", policy_name, group_name),
+                            policy_type: PolicyType::Inline,
+                            statements,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(policies)
+}
+
+fn display_policy(policy: &PolicyInfo) {
+    let type_label = match policy.policy_type {
+        PolicyType::AwsManaged => "AWS Managed".dimmed(),
+        PolicyType::CustomerManaged => "Customer Managed".dimmed(),
+        PolicyType::Inline => "Inline".dimmed(),
+    };
+
+    println!(
+        "\n{} {} ({})",
+        "▸".blue(),
+        policy.name.cyan().bold(),
+        type_label
+    );
+
+    for stmt in &policy.statements {
+        let effect_colored = if stmt.effect == "Allow" {
+            stmt.effect.green()
+        } else {
+            stmt.effect.red()
+        };
+
+        println!("  {} {}", "Effect:".dimmed(), effect_colored);
+
+        if !stmt.actions.is_empty() {
+            println!("  {}", "Actions:".dimmed());
+            for action in &stmt.actions {
+                println!("    {} {}", "-".dimmed(), action);
+            }
+        }
+
+        if !stmt.resources.is_empty() {
+            println!("  {}", "Resources:".dimmed());
+            for resource in &stmt.resources {
+                println!("    {} {}", "-".dimmed(), resource);
+            }
+        }
+
+        if let Some(conditions) = &stmt.conditions {
+            println!("  {} {}", "Conditions:".dimmed(), conditions.dimmed());
+        }
+    }
+}
+
+async fn show_aws_identity(config: &aws_config::SdkConfig) -> Result<()> {
+    let spinner = show_spinner("Fetching AWS identity...");
+    let identity = get_identity_info(config).await?;
+    spinner.finish_and_clear();
+
+    print_header("AWS Identity");
+    println!("  {} {}", "Account:".dimmed(), identity.account.white());
+    println!("  {} {}", "Type:".dimmed(), identity.type_name().cyan());
+    println!("  {} {}", "ARN:".dimmed(), identity.arn.white());
+    println!("  {} {}", "Name:".dimmed(), identity.name().cyan().bold());
+
+    let iam = aws_sdk_iam::Client::new(config);
+
+    let spinner = show_spinner("Fetching policies...");
+    let policies = match &identity.identity_type {
+        IdentityType::User(name) => get_user_policies(&iam, name).await?,
+        IdentityType::AssumedRole(role) => get_role_policies(&iam, role).await?,
+        IdentityType::FederatedUser(_) => {
+            spinner.finish_and_clear();
+            print_warning("Federated users: permissions come from the assumed role's policies");
+            return Ok(());
+        }
+        IdentityType::Unknown => {
+            spinner.finish_and_clear();
+            print_warning("Unknown identity type - cannot fetch policies");
+            return Ok(());
+        }
+    };
+    spinner.finish_and_clear();
+
+    if policies.is_empty() {
+        print_warning("No policies found");
+        return Ok(());
+    }
+
+    print_header(&format!("Policies ({})", policies.len()));
+
+    for policy in &policies {
+        display_policy(policy);
+    }
+
+    println!();
+    Ok(())
+}
+
+// ==================== EKS Cluster Functions ====================
 
 async fn get_cluster_info(config: &aws_config::SdkConfig, cluster: &str) -> Result<Cluster> {
     let client = aws_sdk_eks::Client::new(config);
@@ -578,6 +1068,31 @@ fn show_spinner(message: &str) -> ProgressBar {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    // Load AWS config (needed for all AWS operations)
+    let aws_config = get_aws_config().await;
+
+    // Check AWS session
+    let spinner = show_spinner("Checking AWS SSO session...");
+    if !check_aws_session(&aws_config).await {
+        spinner.finish_and_clear();
+        print_warning("SSO session expired. Logging in...");
+        aws_sso_login()?;
+        // Reload config after login
+        let aws_config = get_aws_config().await;
+        if !check_aws_session(&aws_config).await {
+            print_error("AWS session still invalid after login");
+            std::process::exit(1);
+        }
+    } else {
+        spinner.finish_and_clear();
+    }
+    print_success("AWS session active");
+
+    // Handle --whoami before EKS-specific logic
+    if args.whoami {
+        return show_aws_identity(&aws_config).await;
+    }
+
     // Detect environment if not specified
     let env = match args.env {
         Some(e) => e,
@@ -604,20 +1119,6 @@ async fn main() -> Result<()> {
         Some(None) => Some(format!("/app/log/{}.log", env.long_name())),
         None => None,
     };
-
-    // Load AWS config
-    let aws_config = get_aws_config().await;
-
-    // Check AWS session
-    let spinner = show_spinner("Checking AWS SSO session...");
-    if !check_aws_session(&aws_config).await {
-        spinner.finish_and_clear();
-        print_warning("SSO session expired. Logging in...");
-        aws_sso_login()?;
-    } else {
-        spinner.finish_and_clear();
-    }
-    print_success("AWS session active");
 
     // Update kubeconfig
     let spinner = show_spinner(&format!("Updating kubeconfig for {}...", cluster));
