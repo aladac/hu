@@ -70,6 +70,12 @@ ci-package target version:
 ci-is-prerelease tag:
     @./scripts/is-prerelease.sh {{tag}}
 
+ci-verify-version tag:
+    ./scripts/verify-version.sh {{tag}}
+
+ci-publish:
+    cargo publish --token $CRATES_API_KEY
+
 # Full release prep
 dist: lint test release
     @echo "Release ready in target/release/"
