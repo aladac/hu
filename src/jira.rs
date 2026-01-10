@@ -407,10 +407,7 @@ pub fn display_projects(projects: &[JiraProject]) {
         ]);
 
     for project in projects {
-        let project_type = project
-            .project_type_key
-            .as_deref()
-            .unwrap_or("-");
+        let project_type = project.project_type_key.as_deref().unwrap_or("-");
         let lead = project
             .lead
             .as_ref()
@@ -455,11 +452,7 @@ pub fn display_project(project: &JiraProject) {
     println!();
 
     if let Some(lead) = &project.lead {
-        println!(
-            "  {} {}",
-            "Lead:".yellow(),
-            lead.display_name.white()
-        );
+        println!("  {} {}", "Lead:".yellow(), lead.display_name.white());
     }
 
     if let Some(project_type) = &project.project_type_key {
@@ -531,7 +524,10 @@ pub async fn search_issues(
         .query(&[
             ("jql", jql),
             ("maxResults", &max_results.to_string()),
-            ("fields", "summary,status,assignee,priority,issuetype,parent"),
+            (
+                "fields",
+                "summary,status,assignee,priority,issuetype,parent",
+            ),
         ])
         .send()
         .await?;
