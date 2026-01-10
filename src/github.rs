@@ -69,9 +69,7 @@ fn get_client(config: &GitHubConfig) -> Result<(reqwest::Client, String)> {
          Create a token at: https://github.com/settings/tokens",
     )?;
 
-    let client = reqwest::Client::builder()
-        .user_agent("hu-cli")
-        .build()?;
+    let client = reqwest::Client::builder().user_agent("hu-cli").build()?;
 
     Ok((client, token.clone()))
 }
@@ -253,6 +251,11 @@ pub fn detect_repo() -> Option<String> {
 
     let url = String::from_utf8_lossy(&output.stdout);
     parse_repo_from_url(url.trim())
+}
+
+/// Normalize a repo string - handles owner/repo, SSH URLs, and HTTPS URLs
+pub fn normalize_repo(input: &str) -> String {
+    parse_repo_from_url(input).unwrap_or_else(|| input.to_string())
 }
 
 fn parse_repo_from_url(url: &str) -> Option<String> {
