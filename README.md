@@ -1,4 +1,4 @@
-[![crates.io](https://img.shields.io/badge/crates.io-0.1.0--pre20-orange)](https://crates.io/crates/hu/0.1.0-pre20)
+[![crates.io](https://img.shields.io/badge/crates.io-0.1.0--pre21-orange)](https://crates.io/crates/hu/0.1.0-pre21)
 
 # hu
 
