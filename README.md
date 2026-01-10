@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-0.1.0--pre17-blue)
+[![crates.io](https://img.shields.io/badge/crates.io-0.1.0--pre17-orange)](https://crates.io/crates/hu/0.1.0-pre17)
 
 aws sso login # if needed check if needed
 
