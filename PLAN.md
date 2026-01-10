@@ -14,240 +14,148 @@ A unified CLI for dev workflows: Kubernetes pods, Jira tickets, GitHub PRs/Actio
 - [x] Pod discovery and filtering by type
 - [x] Interactive shell access with custom prompts
 - [x] Multi-pod log tailing with color-coded output
+- [x] Jira OAuth 2.0 authentication
+- [x] Jira ticket lookup and search
+- [x] Jira project listing
+- [x] GitHub token authentication
+- [x] GitHub Actions workflow runs listing
+- [x] GitHub Actions filtering by actor, workflow name
+- [x] Config-based defaults (repo, actor, workflow)
+
+## Project Configuration
+
+Link a Jira project to GitHub repos for unified workflow tracking.
+
+### Config File (`~/.config/hu/project.json`)
+
+```json
+{
+  "default_project": "BFR",
+  "projects": {
+    "BFR": {
+      "name": "Booking Flow Rewrite",
+      "jira_key": "BFR",
+      "github_repos": [
+        "fusetechnologies/fuseignited-cms"
+      ],
+      "github_actor": "aladac",
+      "github_workflow": "Rspec tests for ruby on rails development",
+      "pipeline": "cms"
+    }
+  }
+}
+```
 
 ## Planned Features
 
-### Jira Integration
+### Dashboard Summary (`hu status` or `hu`)
 
-- OAuth authentication flow
-- Fetch ticket details by ID (`PROJ-123`)
-- Display ticket summary, description, status, assignee
-- Quick ticket search by project/sprint
-- Open ticket in browser
+Display a unified view of your current work:
 
-### GitHub Integration
+```
+BFR - Booking Flow Rewrite
+==========================
 
-- List PRs for current branch or by number
-- Show PR status, reviews, checks
-- Monitor GitHub Actions workflow runs
-- Display action logs and failure details
-- Link PRs to Jira tickets (extract from branch name)
+Jira Tasks (assigned to you):
+  1. BFR-7423  In Progress   Add Allianz and Protect insurance
+  2. BFR-7353  In Review     Calculate package full amount
+  3. BFR-3838  To Do         Extract Checkout Parameters
+  ... (top 10)
+
+GitHub PRs (open):
+  3 open PRs on fusetechnologies/fuseignited-cms
+  #5721  BFR-7423-protect-insurance    Ready for review
+  #5718  BFR-7353-calculate-package    Changes requested
+  #5715  BFR-3838-extract-checkout     Draft
+
+GitHub Actions (Rspec by aladac):
+  2 running, 8 successful, 2 failed
+  #31567  running   BFR-7279-Package-...  2m 34s
+  #31566  success   BFR-7353-calculat...  5m ago
+
+Pipeline (cms):
+  Status: Succeeded
+  Last run: 2h ago
+```
+
+### Command Structure
+
+```bash
+# Dashboard (default)
+hu                                # Show project dashboard
+hu status                         # Same as above
+hu status -p INF                  # Different project
+
+# Jira (existing + enhancements)
+hu jira                           # List assigned tasks (default project)
+hu jira BFR-123                   # Show ticket details
+hu jira search "auth bug"         # Search tickets
+
+# GitHub (existing + enhancements)
+hu gh runs                        # Workflow runs (config defaults)
+hu gh runs --ok                   # Only successful runs
+hu gh prs                         # List open PRs for project repos
+hu gh prs --mine                  # PRs by current user
+
+# Pipeline (new)
+hu pipeline                       # Show default pipeline status
+hu pipeline cms                   # Specific pipeline
+hu pipeline --logs                # View execution logs
+
+# EKS (existing)
+hu eks                            # List pods
+hu eks -p 1                       # Connect to pod
+hu eks --log                      # Tail logs
+```
+
+### Linking Jira to GitHub
+
+- Extract Jira ticket key from branch names (e.g., `BFR-7423-protect-insurance`)
+- Match GitHub PRs/Actions to Jira tickets
+- Show related PRs when viewing a Jira ticket
+- Show Jira ticket details when viewing a PR
 
 ### AWS CodePipeline Integration (READ-ONLY)
 
 - List pipeline executions
-- Show pipeline stage status (Source → Build → Deploy)
+- Show pipeline stage status (Source -> Build -> Deploy)
 - Display execution history
 - View execution logs
-
-### AWS Secrets Manager Integration (READ-ONLY)
-
-- List secrets by prefix/pattern (names only)
-- Show secret metadata (last rotated, etc.)
 
 ## Architecture
 
 ```
 src/
 ├── main.rs              # CLI entry, command routing
-├── lib.rs               # Public API
-├── cli/
-│   ├── mod.rs           # Clap parser
-│   └── commands/
-│       ├── eks.rs       # Pod access (current functionality)
-│       ├── jira.rs      # Ticket lookup
-│       ├── gh.rs        # GitHub PRs and Actions
-│       ├── pipeline.rs  # CodePipeline status
-│       └── secret.rs    # Secrets Manager
-├── auth/
-│   ├── aws.rs           # SSO session management
-│   ├── jira.rs          # OAuth flow
-│   └── github.rs        # GitHub token
-├── api/
-│   ├── jira.rs          # Jira REST client
-│   ├── github.rs        # GitHub API client
-│   └── aws.rs           # AWS SDK wrappers
-└── ui/
-    ├── output.rs        # Consistent formatting
-    ├── table.rs         # Table display
-    └── progress.rs      # Spinners
+├── aws.rs               # SSO session management
+├── jira.rs              # Jira OAuth + API client
+├── github.rs            # GitHub token + API client
+├── pipeline.rs          # CodePipeline status (planned)
+├── project.rs           # Project config management (planned)
+├── dashboard.rs         # Unified status view (planned)
+├── utils.rs             # Shared utilities
+└── commands/
+    └── eks.rs           # Pod access
 ```
 
-## Command Examples
+## Config Locations
 
-```bash
-# EKS (existing)
-hu eks                            # List pods
-hu eks -p 1                       # Connect to pod
-hu eks --log                      # Tail logs
+- `~/.config/hu/settings.toml` - General settings
+- `~/.config/hu/github.json` - GitHub token + defaults
+- `~/.config/hu/jira_token.json` - Jira OAuth tokens
+- `~/.config/hu/project.json` - Project mappings (planned)
 
-# Jira
-hu jira PROJ-123                  # Show ticket details
-hu jira search "auth bug"         # Search tickets
+## Dependencies
 
-# GitHub
-hu gh pr                          # Show PR for current branch
-hu gh pr 456                      # Show specific PR
-hu gh runs                        # Show workflow runs
-hu gh runs --watch                # Live monitor
+Current:
+- `clap` - CLI argument parsing
+- `reqwest` - HTTP client (GitHub, Jira APIs)
+- `tokio` - Async runtime
+- `serde` - Serialization
+- `colored` - Terminal colors
+- `comfy-table` - Table display
+- `indicatif` - Progress spinners
+- `anyhow/thiserror` - Error handling
 
-# AWS Pipelines (read-only)
-hu pipeline                       # List recent executions
-hu pipeline cms                   # Show pipeline status
-hu pipeline cms --logs            # View execution logs
-
-# Secrets (read-only)
-hu secret list                    # List secret names
-hu secret list cms-               # List secrets by prefix
-```
-
-## Dependencies to Add
-
-- `gouqi` - Jira API client (see below)
-- `octocrab` - GitHub API (see below)
+Planned:
 - `aws-sdk-codepipeline` - Pipeline status
-- `aws-sdk-secretsmanager` - Secrets access
-- `keyring` - Secure token storage
-- `open` - Open URLs in browser
-
-## Gouqi - Jira API Client
-
-**Version**: 0.20.0
-**Repo**: https://github.com/bazaah/gouqi (fork of goji)
-
-### Features
-
-- **Sync & Async API**: Default sync, async via feature flag
-- **Multiple auth**: Basic auth, bearer tokens, cookie sessions, OAuth 1.0a (Jira Server)
-- **Full coverage**: Issues, projects, boards, sprints, users, attachments
-- **Caching & observability**: Built-in infrastructure
-
-### Installation
-
-```bash
-cargo add gouqi
-# For async support:
-cargo add gouqi --features async
-```
-
-### Usage Examples
-
-```rust
-use gouqi::{Credentials, Jira};
-
-// Create client with basic auth
-let jira = Jira::new(
-    "https://company.atlassian.net",
-    Credentials::Basic("user@example.com", "api-token")
-)?;
-
-// Search issues with JQL
-let issues = jira.search()
-    .iter("project = PROJ AND assignee = currentUser()", &Default::default())?;
-
-for issue in issues {
-    println!("{}: {}", issue.key, issue.fields.summary);
-}
-
-// Get single issue
-let issue = jira.issues().get("PROJ-123")?;
-```
-
-### Async Usage
-
-```rust
-use gouqi::{Credentials, Jira};
-
-let jira = Jira::new(host, Credentials::Basic(user, token))?;
-let issue = jira.issues().get_async("PROJ-123").await?;
-```
-
-### hu Integration Plan
-
-For `hu jira` commands:
-- Store Jira credentials in config (host, email, API token)
-- Use gouqi for issue fetching and search
-- Implement `hu jira PROJ-123`, `hu jira search "query"`
-
-## Octocrab - GitHub API Client
-
-**Version**: 0.49.5 (Dec 2025)
-**Repo**: https://github.com/XAMPPRocky/octocrab
-
-### Features
-
-- **Semantic API**: Strongly-typed access to GitHub endpoints (repos, issues, PRs, commits, Actions, orgs, teams, users)
-- **GraphQL support**: For complex queries
-- **Webhook support**: Deserializable types for GitHub webhook events
-- **HTTP API**: Lower-level access for custom extensions
-- **Static API**: Reference-counted singleton pattern
-
-### Installation
-
-```bash
-cargo add octocrab
-```
-
-### Usage Examples
-
-```rust
-// Get a pull request
-let pr = octocrab::instance()
-    .pulls("owner", "repo")
-    .get(123)
-    .await?;
-
-// List workflow runs
-let runs = octocrab::instance()
-    .workflows("owner", "repo")
-    .list_runs("ci.yml")
-    .send()
-    .await?;
-
-// List PRs
-let prs = octocrab::instance()
-    .pulls("owner", "repo")
-    .list()
-    .state(octocrab::params::State::Open)
-    .send()
-    .await?;
-```
-
-### Authentication
-
-```rust
-// Personal access token
-let octocrab = octocrab::Octocrab::builder()
-    .personal_token(token)
-    .build()?;
-
-// GitHub App
-let octocrab = octocrab::Octocrab::builder()
-    .app(app_id, key)
-    .build()?;
-```
-
-### hu Integration Plan
-
-For `hu gh` commands (READ-ONLY):
-- Store GitHub token in config or use `gh` CLI's auth
-- Use octocrab for PR listing, status checks, workflow runs
-- Implement:
-  - `hu gh pr` - List/show PRs
-  - `hu gh runs` - List workflow runs and status
-
-### Workflow Run Viewing with Octocrab
-
-```rust
-// List workflow runs
-let runs = octocrab::instance()
-    .workflows("owner", "repo")
-    .list_all_runs()
-    .send()
-    .await?;
-
-// Filter failed runs for display
-let failed_runs = runs.workflow_runs
-    .iter()
-    .filter(|r| r.conclusion == Some("failure".to_string()));
-```
