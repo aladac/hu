@@ -93,3 +93,13 @@ gh-clear:
 # Clear all workflow runs
 gh-clear-all:
     gh run list --limit 1000 --json databaseId -q '.[].databaseId' | xargs -I{} gh run delete {}
+
+# Delete a remote tag
+gh-tag-delete tag:
+    git push origin :refs/tags/{{tag}}
+    git tag -d {{tag}} 2>/dev/null || true
+
+# Delete ALL remote tags (use with caution!)
+gh-tag-delete-all:
+    git tag -l | xargs -I{} git push origin :refs/tags/{}
+    git tag -l | xargs git tag -d
