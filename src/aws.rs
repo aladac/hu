@@ -1085,6 +1085,12 @@ pub fn display_spawned_instance(instance: &SpawnedInstance) {
         );
     }
     println!("  {} {}", "Key File:".dimmed(), instance.key_path.white());
+    println!("  {} {}", "Key Name:".dimmed(), instance.key_name.dimmed());
+    println!(
+        "  {} {}",
+        "Security Group:".dimmed(),
+        instance.security_group_id.dimmed()
+    );
     println!();
     println!("  {}", "Connect:".dimmed());
     println!(
