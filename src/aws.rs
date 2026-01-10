@@ -180,6 +180,7 @@ pub struct ProfileCapabilities {
     pub eks_clusters: Option<Vec<String>>,
     pub ec2_accessible: Option<bool>,
     pub s3_bucket_count: Option<usize>,
+    pub pipeline_count: Option<usize>,
 }
 
 /// Check what a profile can do (read-only operations only)
@@ -207,6 +208,7 @@ pub async fn check_profile_capabilities(profile: &str, region: &str) -> ProfileC
             eks_clusters: None,
             ec2_accessible: None,
             s3_bucket_count: None,
+            pipeline_count: None,
         };
     }
 
@@ -237,6 +239,15 @@ pub async fn check_profile_capabilities(profile: &str, region: &str) -> ProfileC
         }
     };
 
+    // Check CodePipeline (list pipelines - read only, count only)
+    let pipeline_count = {
+        let cp = aws_sdk_codepipeline::Client::new(&config);
+        match cp.list_pipelines().send().await {
+            Ok(resp) => Some(resp.pipelines().len()),
+            Err(_) => None,
+        }
+    };
+
     ProfileCapabilities {
         profile: profile.to_string(),
         valid,
@@ -244,6 +255,7 @@ pub async fn check_profile_capabilities(profile: &str, region: &str) -> ProfileC
         eks_clusters,
         ec2_accessible,
         s3_bucket_count,
+        pipeline_count,
     }
 }
 
@@ -337,6 +349,17 @@ fn print_discovery_table(results: &[ProfileCapabilities], show_all: bool) {
             } else {
                 println!("    {} {}", "S3:".dimmed(), "no access".red());
             }
+
+            // Pipelines
+            if let Some(count) = caps.pipeline_count {
+                println!(
+                    "    {} {} pipelines",
+                    "Pipelines:".dimmed(),
+                    count.to_string().green()
+                );
+            } else {
+                println!("    {} {}", "Pipelines:".dimmed(), "no access".red());
+            }
         } else {
             println!(
                 "  {} {} {}",
@@ -380,6 +403,7 @@ fn print_discovery_json(results: &[ProfileCapabilities], show_all: bool) {
                 "eks_clusters": caps.eks_clusters,
                 "ec2_accessible": caps.ec2_accessible,
                 "s3_bucket_count": caps.s3_bucket_count,
+                "pipeline_count": caps.pipeline_count,
             })
         })
         .collect();
