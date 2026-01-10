@@ -269,6 +269,17 @@ pub struct IssueFields {
     pub reporter: Option<User>,
     pub priority: Option<Priority>,
     pub issuetype: Option<IssueType>,
+    pub parent: Option<ParentIssue>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ParentIssue {
+    pub fields: Option<ParentFields>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ParentFields {
+    pub summary: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -520,7 +531,7 @@ pub async fn search_issues(
         .query(&[
             ("jql", jql),
             ("maxResults", &max_results.to_string()),
-            ("fields", "summary,status,assignee,priority,issuetype"),
+            ("fields", "summary,status,assignee,priority,issuetype,parent"),
         ])
         .send()
         .await?;
@@ -610,8 +621,8 @@ pub fn display_search_results(result: &SearchResult) {
             Cell::new("Key").fg(Color::Cyan),
             Cell::new("Type").fg(Color::Magenta),
             Cell::new("Status").fg(Color::Yellow),
+            Cell::new("Epic").fg(Color::Blue),
             Cell::new("Summary").fg(Color::White),
-            Cell::new("Assignee").fg(Color::Green),
         ]);
 
     for issue in &result.issues {
@@ -627,14 +638,21 @@ pub fn display_search_results(result: &SearchResult) {
             .as_ref()
             .map(|s| s.name.as_str())
             .unwrap_or("-");
-        let assignee = issue
+        let epic = issue
             .fields
-            .assignee
+            .parent
             .as_ref()
-            .map(|a| a.display_name.as_str())
-            .unwrap_or("Unassigned");
-        let summary = if issue.fields.summary.len() > 50 {
-            format!("{}...", &issue.fields.summary[..47])
+            .and_then(|p| p.fields.as_ref())
+            .map(|f| {
+                if f.summary.len() > 20 {
+                    format!("{}...", &f.summary[..17])
+                } else {
+                    f.summary.clone()
+                }
+            })
+            .unwrap_or_else(|| "-".to_string());
+        let summary = if issue.fields.summary.len() > 45 {
+            format!("{}...", &issue.fields.summary[..42])
         } else {
             issue.fields.summary.clone()
         };
@@ -643,8 +661,8 @@ pub fn display_search_results(result: &SearchResult) {
             Cell::new(&issue.key).fg(Color::Cyan),
             Cell::new(issue_type).fg(Color::Magenta),
             Cell::new(status).fg(Color::Yellow),
+            Cell::new(epic).fg(Color::Blue),
             Cell::new(summary).fg(Color::White),
-            Cell::new(assignee).fg(Color::Green),
         ]);
     }
 
