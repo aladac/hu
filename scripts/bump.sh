@@ -56,13 +56,17 @@ echo "New version: $new_version"
 # Update Cargo.toml
 sed -i '' "s/^version = \"$current\"/version = \"$new_version\"/" Cargo.toml
 
-echo "Updated Cargo.toml"
+# Update README.md version badge (escape dashes for shields.io URL)
+badge_version=$(echo "$new_version" | sed 's/-/--/g')
+sed -i '' "s|version-[^-]*--[^-]*-blue|version-${badge_version}-blue|" README.md
+
+echo "Updated Cargo.toml and README.md"
 echo "Building and installing release version..."
 cargo build --release
 cargo install --path .
 
 # Git commit (includes Cargo.lock updated by build), tag, and push
-git add Cargo.toml Cargo.lock
+git add Cargo.toml Cargo.lock README.md
 git commit -m "chore: Bump version to $new_version"
 git tag "v$new_version"
 git push origin HEAD --tags

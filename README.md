@@ -1,3 +1,5 @@
+![version](https://img.shields.io/badge/version-0.1.0--pre17-blue)
+
 aws sso login # if needed check if needed
 
 aws eks update-kubeconfig --name prod-eks --region us-east-1 # from --env prod, alternative --env dev --env stg
