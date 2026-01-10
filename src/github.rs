@@ -1,12 +1,21 @@
 use anyhow::{bail, Context, Result};
+use comfy_table::{Cell, Color};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
-use crate::utils::{print_error, print_header, print_success};
+use crate::utils::{
+    create_table, load_json_config, print_error, print_header, print_success, save_json_config,
+    truncate, workflow_status_icon, TableHeader, DISPLAY_BRANCH_MAX_LEN,
+    DISPLAY_BRANCH_TRUNCATE_AT, DISPLAY_TITLE_MAX_LEN, DISPLAY_TITLE_TRUNCATE_AT,
+    GITHUB_FETCH_MULTIPLIER, GITHUB_MAX_FETCH_LIMIT, GITHUB_PER_REPO_MIN_LIMIT,
+    PROJECT_BRANCH_MAX_LEN, PROJECT_BRANCH_TRUNCATE_AT, PROJECT_REPO_MAX_LEN,
+    PROJECT_REPO_TRUNCATE_AT, PROJECT_TITLE_MAX_LEN, PROJECT_TITLE_TRUNCATE_AT,
+};
 
 const GITHUB_API_URL: &str = "https://api.github.com";
 
 // ==================== Config ====================
+
+const GITHUB_CONFIG_FILE: &str = "github.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GitHubConfig {
@@ -17,29 +26,12 @@ pub struct GitHubConfig {
     pub default_project: Option<String>,
 }
 
-fn get_github_config_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Could not determine config directory")?;
-    Ok(config_dir.join("hu").join("github.json"))
-}
-
 pub fn load_github_config() -> Result<GitHubConfig> {
-    let path = get_github_config_path()?;
-    if path.exists() {
-        let content = std::fs::read_to_string(&path)?;
-        Ok(serde_json::from_str(&content)?)
-    } else {
-        Ok(GitHubConfig::default())
-    }
+    load_json_config(GITHUB_CONFIG_FILE)
 }
 
 pub fn save_github_config(config: &GitHubConfig) -> Result<()> {
-    let path = get_github_config_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let content = serde_json::to_string_pretty(config)?;
-    std::fs::write(&path, content)?;
-    Ok(())
+    save_json_config(GITHUB_CONFIG_FILE, config)
 }
 
 // ==================== API Types ====================
@@ -99,7 +91,7 @@ pub async fn get_workflow_runs(
     // Fetch more than requested to allow for client-side filtering
     let fetch_limit =
         if filter.workflow.is_some() || filter.success_only || filter.project_key.is_some() {
-            (limit * 5).min(100)
+            (limit * GITHUB_FETCH_MULTIPLIER).min(GITHUB_MAX_FETCH_LIMIT)
         } else {
             limit
         };
@@ -213,7 +205,7 @@ pub async fn get_project_workflow_runs(
                     project_key: filter_project_key.as_deref(),
                 };
                 // Fetch more per repo, we'll merge and limit later
-                let per_repo_limit = (limit / repos.len() as u32).max(5);
+                let per_repo_limit = (limit / repos.len() as u32).max(GITHUB_PER_REPO_MIN_LIMIT);
                 match get_workflow_runs(&config, &repo, &filter, per_repo_limit).await {
                     Ok(response) => response
                         .workflow_runs
@@ -252,51 +244,33 @@ pub async fn get_project_workflow_runs(
 
 pub fn display_workflow_runs(runs: &WorkflowRunsResponse, repo: &str) {
     use colored::Colorize;
-    use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
 
     if runs.workflow_runs.is_empty() {
         print_error("No workflow runs found");
         return;
     }
 
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            Cell::new("").fg(Color::Yellow),
-            Cell::new("Title").fg(Color::White),
-            Cell::new("Branch").fg(Color::Magenta),
-        ]);
+    let mut table = create_table(&[
+        TableHeader::new("", Color::Yellow),
+        TableHeader::new("Title", Color::White),
+        TableHeader::new("Branch", Color::Magenta),
+    ]);
 
     for run in &runs.workflow_runs {
-        let status_icon = match (run.status.as_str(), run.conclusion.as_deref()) {
-            ("completed", Some("success")) => "✓".green().to_string(),
-            ("completed", Some("failure")) => "✗".red().to_string(),
-            ("completed", Some("cancelled")) => "⊘".dimmed().to_string(),
-            ("in_progress", _) => "●".yellow().to_string(),
-            ("queued", _) | ("waiting", _) => "○".blue().to_string(),
-            _ => "?".white().to_string(),
-        };
+        let status_icon = workflow_status_icon(&run.status, run.conclusion.as_deref()).to_string();
 
         // Use display_title (PR title) which includes Jira ticket
         let title = run
             .display_title
             .as_ref()
-            .map(|t| {
-                if t.len() > 55 {
-                    format!("{}...", &t[..52])
-                } else {
-                    t.clone()
-                }
-            })
+            .map(|t| truncate(t, DISPLAY_TITLE_MAX_LEN, DISPLAY_TITLE_TRUNCATE_AT))
             .unwrap_or_else(|| run.name.clone());
 
-        let branch = if run.head_branch.len() > 25 {
-            format!("{}...", &run.head_branch[..22])
-        } else {
-            run.head_branch.clone()
-        };
+        let branch = truncate(
+            &run.head_branch,
+            DISPLAY_BRANCH_MAX_LEN,
+            DISPLAY_BRANCH_TRUNCATE_AT,
+        );
 
         table.add_row(vec![
             Cell::new(&status_icon),
@@ -316,60 +290,42 @@ pub fn display_workflow_runs(runs: &WorkflowRunsResponse, repo: &str) {
 
 pub fn display_project_workflow_runs(runs: &[ProjectWorkflowRun], project_name: &str) {
     use colored::Colorize;
-    use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
 
     if runs.is_empty() {
         print_error("No workflow runs found");
         return;
     }
 
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            Cell::new("").fg(Color::Yellow),
-            Cell::new("Repo").fg(Color::Cyan),
-            Cell::new("Title").fg(Color::White),
-            Cell::new("Branch").fg(Color::Magenta),
-        ]);
+    let mut table = create_table(&[
+        TableHeader::new("", Color::Yellow),
+        TableHeader::new("Repo", Color::Cyan),
+        TableHeader::new("Title", Color::White),
+        TableHeader::new("Branch", Color::Magenta),
+    ]);
 
     for proj_run in runs {
         let run = &proj_run.run;
-        let status_icon = match (run.status.as_str(), run.conclusion.as_deref()) {
-            ("completed", Some("success")) => "✓".green().to_string(),
-            ("completed", Some("failure")) => "✗".red().to_string(),
-            ("completed", Some("cancelled")) => "⊘".dimmed().to_string(),
-            ("in_progress", _) => "●".yellow().to_string(),
-            ("queued", _) | ("waiting", _) => "○".blue().to_string(),
-            _ => "?".white().to_string(),
-        };
+        let status_icon = workflow_status_icon(&run.status, run.conclusion.as_deref()).to_string();
 
         // Use display_title (PR title) which includes Jira ticket
         let title = run
             .display_title
             .as_ref()
-            .map(|t| {
-                if t.len() > 45 {
-                    format!("{}...", &t[..42])
-                } else {
-                    t.clone()
-                }
-            })
+            .map(|t| truncate(t, PROJECT_TITLE_MAX_LEN, PROJECT_TITLE_TRUNCATE_AT))
             .unwrap_or_else(|| run.name.clone());
 
-        let branch = if run.head_branch.len() > 20 {
-            format!("{}...", &run.head_branch[..17])
-        } else {
-            run.head_branch.clone()
-        };
+        let branch = truncate(
+            &run.head_branch,
+            PROJECT_BRANCH_MAX_LEN,
+            PROJECT_BRANCH_TRUNCATE_AT,
+        );
 
         // Short repo label
-        let repo_label = if proj_run.repo_label.len() > 10 {
-            format!("{}...", &proj_run.repo_label[..7])
-        } else {
-            proj_run.repo_label.clone()
-        };
+        let repo_label = truncate(
+            &proj_run.repo_label,
+            PROJECT_REPO_MAX_LEN,
+            PROJECT_REPO_TRUNCATE_AT,
+        );
 
         table.add_row(vec![
             Cell::new(&status_icon),

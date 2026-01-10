@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use aws_sdk_eks::types::Cluster;
 use colored::Colorize;
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use comfy_table::{Cell, Color};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -12,7 +12,10 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::config::Settings;
-use crate::utils::{print_error, print_header, print_success, spinner, ANSI_COLORS};
+use crate::utils::{
+    colorize_log_line, create_table, print_error, print_header, print_success, spinner,
+    TableHeader, ANSI_COLORS,
+};
 
 // ==================== Kubeconfig ====================
 
@@ -354,17 +357,13 @@ fn chrono_parse_timestamp(s: &str) -> Option<u64> {
 }
 
 pub fn display_pods(pods: &[PodInfo], env_name: &str, emoji: &str) {
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            Cell::new("#").fg(Color::Cyan),
-            Cell::new("Pod Name").fg(Color::Magenta),
-            Cell::new("Type").fg(Color::Yellow),
-            Cell::new("Age").fg(Color::Green),
-            Cell::new("Short ID").fg(Color::DarkGrey),
-        ]);
+    let mut table = create_table(&[
+        TableHeader::new("#", Color::Cyan),
+        TableHeader::new("Pod Name", Color::Magenta),
+        TableHeader::new("Type", Color::Yellow),
+        TableHeader::new("Age", Color::Green),
+        TableHeader::new("Short ID", Color::DarkGrey),
+    ]);
 
     for (i, pod) in pods.iter().enumerate() {
         let short_id = &pod.name[pod.name.len().saturating_sub(5)..];
@@ -480,7 +479,8 @@ fn tail_pod_log(
                     "cyan" => prefix.cyan(),
                     _ => prefix.white(),
                 };
-                println!("{} {}", colored_prefix, line);
+                let colored_line = colorize_log_line(&line);
+                println!("{} {}", colored_prefix, colored_line);
             }
         }
     }

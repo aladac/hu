@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use comfy_table::{Cell, Color};
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -8,13 +9,15 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::path::PathBuf;
 
-use crate::utils::{print_error, print_header, print_success, spinner};
+use crate::utils::{
+    create_table, load_json_config, print_error, print_header, print_success, save_json_config,
+    spinner, truncate, TableHeader, DISPLAY_EPIC_MAX_LEN, DISPLAY_EPIC_TRUNCATE_AT,
+    DISPLAY_SUMMARY_MAX_LEN, DISPLAY_SUMMARY_TRUNCATE_AT, JIRA_MAX_RESULTS, OAUTH_CALLBACK_PORT,
+};
 
 const AUTH_URL: &str = "https://auth.atlassian.com/authorize";
 const TOKEN_URL: &str = "https://auth.atlassian.com/oauth/token";
-const CALLBACK_PORT: u16 = 8765;
 
 // ==================== Helpers ====================
 
@@ -50,6 +53,8 @@ fn strip_html(html: &str) -> String {
 
 // ==================== Config ====================
 
+const JIRA_CONFIG_FILE: &str = "jira_token.json";
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JiraConfig {
     pub client_id: Option<String>,
@@ -60,29 +65,12 @@ pub struct JiraConfig {
     pub site_url: Option<String>,
 }
 
-fn get_jira_token_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Could not determine config directory")?;
-    Ok(config_dir.join("hu").join("jira_token.json"))
-}
-
 pub fn load_jira_config() -> Result<JiraConfig> {
-    let path = get_jira_token_path()?;
-    if path.exists() {
-        let content = std::fs::read_to_string(&path)?;
-        Ok(serde_json::from_str(&content)?)
-    } else {
-        Ok(JiraConfig::default())
-    }
+    load_json_config(JIRA_CONFIG_FILE)
 }
 
 pub fn save_jira_config(config: &JiraConfig) -> Result<()> {
-    let path = get_jira_token_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let content = serde_json::to_string_pretty(config)?;
-    std::fs::write(&path, content)?;
-    Ok(())
+    save_json_config(JIRA_CONFIG_FILE, config)
 }
 
 // ==================== OAuth 2.0 Flow ====================
@@ -105,7 +93,7 @@ fn create_oauth_client(config: &JiraConfig) -> Result<BasicClient> {
     )
     .set_redirect_uri(RedirectUrl::new(format!(
         "http://localhost:{}/callback",
-        CALLBACK_PORT
+        OAUTH_CALLBACK_PORT
     ))?);
 
     Ok(client)
@@ -139,11 +127,11 @@ pub async fn login(config: &mut JiraConfig) -> Result<()> {
     }
 
     // Start local server to receive callback
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", CALLBACK_PORT))
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", OAUTH_CALLBACK_PORT))
         .context("Failed to bind to callback port")?;
 
     println!("Waiting for authorization...");
-    println!("(Listening on http://localhost:{})", CALLBACK_PORT);
+    println!("(Listening on http://localhost:{})", OAUTH_CALLBACK_PORT);
 
     let code = wait_for_callback(&listener, &csrf_token)?;
 
@@ -363,7 +351,7 @@ pub async fn list_projects(config: &JiraConfig) -> Result<Vec<JiraProject>> {
     let response = client
         .get(&url)
         .bearer_auth(token)
-        .query(&[("maxResults", "100"), ("orderBy", "name")])
+        .query(&[("maxResults", JIRA_MAX_RESULTS), ("orderBy", "name")])
         .send()
         .await?;
 
@@ -388,23 +376,18 @@ pub async fn list_projects(config: &JiraConfig) -> Result<Vec<JiraProject>> {
 
 pub fn display_projects(projects: &[JiraProject]) {
     use colored::Colorize;
-    use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
 
     if projects.is_empty() {
         println!("No projects found");
         return;
     }
 
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            Cell::new("Key").fg(Color::Cyan),
-            Cell::new("Name").fg(Color::White),
-            Cell::new("Type").fg(Color::Magenta),
-            Cell::new("Lead").fg(Color::Green),
-        ]);
+    let mut table = create_table(&[
+        TableHeader::new("Key", Color::Cyan),
+        TableHeader::new("Name", Color::White),
+        TableHeader::new("Type", Color::Magenta),
+        TableHeader::new("Lead", Color::Green),
+    ]);
 
     for project in projects {
         let project_type = project.project_type_key.as_deref().unwrap_or("-");
@@ -602,24 +585,19 @@ pub fn display_issue(issue: &JiraIssue) {
 
 pub fn display_search_results(result: &SearchResult) {
     use colored::Colorize;
-    use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
 
     if result.issues.is_empty() {
         print_error("No issues found");
         return;
     }
 
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_header(vec![
-            Cell::new("Key").fg(Color::Cyan),
-            Cell::new("Type").fg(Color::Magenta),
-            Cell::new("Status").fg(Color::Yellow),
-            Cell::new("Epic").fg(Color::Blue),
-            Cell::new("Summary").fg(Color::White),
-        ]);
+    let mut table = create_table(&[
+        TableHeader::new("Key", Color::Cyan),
+        TableHeader::new("Type", Color::Magenta),
+        TableHeader::new("Status", Color::Yellow),
+        TableHeader::new("Epic", Color::Blue),
+        TableHeader::new("Summary", Color::White),
+    ]);
 
     for issue in &result.issues {
         let issue_type = issue
@@ -639,19 +617,13 @@ pub fn display_search_results(result: &SearchResult) {
             .parent
             .as_ref()
             .and_then(|p| p.fields.as_ref())
-            .map(|f| {
-                if f.summary.len() > 20 {
-                    format!("{}...", &f.summary[..17])
-                } else {
-                    f.summary.clone()
-                }
-            })
+            .map(|f| truncate(&f.summary, DISPLAY_EPIC_MAX_LEN, DISPLAY_EPIC_TRUNCATE_AT))
             .unwrap_or_else(|| "-".to_string());
-        let summary = if issue.fields.summary.len() > 45 {
-            format!("{}...", &issue.fields.summary[..42])
-        } else {
-            issue.fields.summary.clone()
-        };
+        let summary = truncate(
+            &issue.fields.summary,
+            DISPLAY_SUMMARY_MAX_LEN,
+            DISPLAY_SUMMARY_TRUNCATE_AT,
+        );
 
         table.add_row(vec![
             Cell::new(&issue.key).fg(Color::Cyan),

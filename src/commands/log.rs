@@ -7,19 +7,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use crate::utils::{expand_tilde, print_header};
-
-fn colorize_log_line(line: &str) -> String {
-    if line.contains("ERROR") || line.contains("error") || line.contains("Error") {
-        line.red().to_string()
-    } else if line.contains("WARN") || line.contains("warn") || line.contains("Warning") {
-        line.yellow().to_string()
-    } else if line.contains("DEBUG") || line.contains("debug") {
-        line.dimmed().to_string()
-    } else {
-        line.to_string()
-    }
-}
+use crate::utils::{colorize_log_line, expand_tilde, print_header, LOG_POLL_INTERVAL_MS};
 
 pub fn view(
     path: &str,
@@ -78,7 +66,7 @@ pub fn view(
         let mut last_pos = last_size;
 
         while running.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(Duration::from_millis(LOG_POLL_INTERVAL_MS));
 
             let current_size = std::fs::metadata(&path)
                 .map(|m| m.len())
