@@ -261,9 +261,15 @@ pub struct IssueType {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub issues: Vec<JiraIssue>,
-    pub total: u32,
+    /// Total count (not returned by new /search/jql endpoint)
+    #[serde(default)]
+    pub total: Option<u32>,
+    /// Indicates if this is the last page of results
+    #[serde(default)]
+    pub is_last: Option<bool>,
 }
 
 pub async fn get_issue(config: &JiraConfig, key: &str) -> Result<JiraIssue> {
@@ -301,8 +307,9 @@ pub async fn search_issues(
     let cloud_id = config.cloud_id.as_ref().context("No cloud ID")?;
 
     let client = reqwest::Client::new();
+    // Use the new /search/jql endpoint (the old /search endpoint was removed)
     let url = format!(
-        "https://api.atlassian.com/ex/jira/{}/rest/api/3/search",
+        "https://api.atlassian.com/ex/jira/{}/rest/api/3/search/jql",
         cloud_id
     );
 
@@ -441,15 +448,12 @@ pub fn display_search_results(result: &SearchResult) {
     }
 
     println!();
-    println!(
-        "{}",
-        format!(
-            "Found {} issues (showing {})",
-            result.total,
-            result.issues.len()
-        )
-        .dimmed()
-    );
+    let count_msg = if let Some(total) = result.total {
+        format!("Found {} issues (showing {})", total, result.issues.len())
+    } else {
+        format!("Showing {} issues", result.issues.len())
+    };
+    println!("{}", count_msg.dimmed());
     println!("{table}");
     println!();
 }
