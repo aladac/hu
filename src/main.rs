@@ -624,6 +624,10 @@ async fn main() -> Result<()> {
                         .or_else(github::detect_repo)
                         .context("No repository specified. Use -r owner/repo or run from a git directory")?;
 
+                    // Use CLI args, fall back to config defaults
+                    let actor = actor.or_else(|| config.default_actor.clone());
+                    let workflow = workflow.or_else(|| config.default_workflow.clone());
+
                     let filter = github::RunsFilter {
                         actor: actor.as_deref(),
                         workflow: workflow.as_deref(),

@@ -12,6 +12,8 @@ const GITHUB_API_URL: &str = "https://api.github.com";
 pub struct GitHubConfig {
     pub token: Option<String>,
     pub default_repo: Option<String>,
+    pub default_actor: Option<String>,
+    pub default_workflow: Option<String>,
 }
 
 fn get_github_config_path() -> Result<PathBuf> {
@@ -279,6 +281,24 @@ pub fn setup() -> Result<()> {
     let repo = repo.trim();
     if !repo.is_empty() {
         config.default_repo = Some(repo.to_string());
+    }
+
+    print!("Default actor (GitHub username, optional): ");
+    stdout().flush()?;
+    let mut actor = String::new();
+    stdin().read_line(&mut actor)?;
+    let actor = actor.trim();
+    if !actor.is_empty() {
+        config.default_actor = Some(actor.to_string());
+    }
+
+    print!("Default workflow filter (partial name, optional): ");
+    stdout().flush()?;
+    let mut workflow = String::new();
+    stdin().read_line(&mut workflow)?;
+    let workflow = workflow.trim();
+    if !workflow.is_empty() {
+        config.default_workflow = Some(workflow.to_string());
     }
 
     save_github_config(&config)?;
