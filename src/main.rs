@@ -124,7 +124,7 @@ enum Commands {
     /// Jira ticket operations
     Jira {
         #[command(subcommand)]
-        action: JiraCommands,
+        action: Option<JiraCommands>,
     },
 }
 
@@ -230,6 +230,13 @@ enum JiraCommands {
 
     /// Search issues assigned to me
     Mine {
+        /// Maximum results to return
+        #[arg(short = 'n', long, default_value = "20")]
+        max: u32,
+    },
+
+    /// My issues in current sprint (default)
+    Sprint {
         /// Maximum results to return
         #[arg(short = 'n', long, default_value = "20")]
         max: u32,
@@ -492,6 +499,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Jira { action } => {
+            let action = action.unwrap_or(JiraCommands::Sprint { max: 20 });
             match action {
                 JiraCommands::Setup => jira::setup(),
 
@@ -525,6 +533,14 @@ async fn main() -> Result<()> {
                 JiraCommands::Mine { max } => {
                     let config = jira::load_jira_config()?;
                     let jql = "assignee = currentUser() ORDER BY updated DESC";
+                    let result = jira::search_issues(&config, jql, max).await?;
+                    jira::display_search_results(&result);
+                    Ok(())
+                }
+
+                JiraCommands::Sprint { max } => {
+                    let config = jira::load_jira_config()?;
+                    let jql = "assignee = currentUser() AND sprint in openSprints() ORDER BY status ASC, priority DESC";
                     let result = jira::search_issues(&config, jql, max).await?;
                     jira::display_search_results(&result);
                     Ok(())
