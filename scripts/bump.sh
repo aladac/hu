@@ -58,8 +58,8 @@ sed -i '' "s/^version = \"$current\"/version = \"$new_version\"/" Cargo.toml
 
 # Update README.md version badge (escape dashes for shields.io URL)
 badge_version=$(echo "$new_version" | sed 's/-/--/g')
-sed -i '' "s|crates\.io-[0-9\.]*--pre[0-9]*-orange|crates.io-${badge_version}-orange|" README.md
-sed -i '' "s|crates\.io/crates/hu/[0-9\.\-pre]*)|crates.io/crates/hu/${new_version})|" README.md
+sed -i '' "s|crates\.io-[0-9][0-9\.]*--pre[0-9]*-orange|crates.io-${badge_version}-orange|" README.md
+sed -i '' "s|crates\.io/crates/hu/[0-9][0-9a-z.\-]*)|crates.io/crates/hu/${new_version})|" README.md
 
 echo "Updated Cargo.toml and README.md"
 echo "Building and installing release version..."
