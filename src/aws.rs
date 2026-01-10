@@ -607,7 +607,16 @@ pub fn ssm_connect(instances: &[Ec2Instance], num: usize) -> Result<()> {
     );
 
     let status = std::process::Command::new("aws")
-        .args(["ssm", "start-session", "--target", &instance.instance_id])
+        .args([
+            "ssm",
+            "start-session",
+            "--target",
+            &instance.instance_id,
+            "--document-name",
+            "AWS-StartInteractiveCommand",
+            "--parameters",
+            "command=[\"bash -l\"]",
+        ])
         .status()
         .context("Failed to start SSM session")?;
 
