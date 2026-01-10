@@ -457,9 +457,9 @@ async fn main() -> Result<()> {
                     aws::discover(&settings.aws.region, all, json).await
                 }
                 _ => {
-                    // Other AWS commands use general profile
+                    // Other AWS commands use configured profile
                     let profile =
-                        resolve_profile(cli_profile, settings.aws.profiles.general_profile());
+                        resolve_profile(cli_profile, settings.aws.profile.as_deref());
                     let aws_config = ensure_aws_session(profile, &settings.aws.region).await?;
                     match action {
                         AwsCommands::Whoami => aws::whoami(&aws_config).await,
@@ -482,8 +482,8 @@ async fn main() -> Result<()> {
             namespace,
             log,
         } => {
-            // Use eks profile for EKS/Kubernetes operations
-            let profile = resolve_profile(cli_profile, settings.aws.profiles.eks_profile());
+            // Use configured profile for EKS/Kubernetes operations
+            let profile = resolve_profile(cli_profile, settings.aws.profile.as_deref());
             let aws_config = ensure_aws_session(profile, &settings.aws.region).await?;
 
             // Handle subcommands or default behavior

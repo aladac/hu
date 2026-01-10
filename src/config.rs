@@ -9,21 +9,7 @@ pub const DEFAULT_SETTINGS: &str = r#"# hu settings
 
 [aws]
 region = "us-east-1"
-
-# AWS profiles with their capabilities
-# Each profile maps to an AWS CLI profile and lists what it can do
-# Capabilities: eks, s3, ec2, secrets, pipelines, general
-[aws.profiles.eks]
-name = "eks"
-capabilities = ["eks"]
-
-[aws.profiles.aws]
-name = "aws"
-capabilities = ["general", "s3", "secrets", "pipelines"]
-
-[aws.profiles.ec2]
-name = "ec2"
-capabilities = ["ec2"]
+# profile = "default"  # Optional: override AWS profile (uses default if not set)
 
 # [kubernetes]
 # namespace = "cms"
@@ -133,59 +119,16 @@ pub struct RepoConfig {
 #[serde(default)]
 pub struct AwsSettings {
     pub region: String,
-    pub profiles: AwsProfiles,
+    /// Optional AWS profile override (uses default profile if not set)
+    pub profile: Option<String>,
 }
 
 impl Default for AwsSettings {
     fn default() -> Self {
         Self {
             region: "us-east-1".to_string(),
-            profiles: AwsProfiles::default(),
+            profile: None,
         }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct AwsProfiles {
-    /// Named profiles with their capabilities
-    #[serde(flatten)]
-    pub profiles: HashMap<String, AwsProfileConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AwsProfileConfig {
-    /// AWS CLI profile name
-    pub name: String,
-    /// List of capabilities (e.g., ["eks", "s3", "ec2"])
-    #[serde(default)]
-    pub capabilities: Vec<String>,
-}
-
-impl AwsProfiles {
-    /// Get profile name for a given capability
-    pub fn profile_for(&self, capability: &str) -> Option<&str> {
-        self.profiles
-            .values()
-            .find(|p| p.capabilities.iter().any(|c| c == capability))
-            .map(|p| p.name.as_str())
-    }
-
-    /// Get profile for EKS operations
-    pub fn eks_profile(&self) -> Option<&str> {
-        self.profile_for("eks")
-    }
-
-    /// Get profile for general AWS operations
-    pub fn general_profile(&self) -> Option<&str> {
-        self.profile_for("general")
-            .or_else(|| self.profile_for("s3"))
-    }
-
-    /// Get profile for EC2 operations
-    #[allow(dead_code)]
-    pub fn ec2_profile(&self) -> Option<&str> {
-        self.profile_for("ec2")
     }
 }
 
