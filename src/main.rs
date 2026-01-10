@@ -279,9 +279,9 @@ enum GitHubCommands {
         #[arg(short, long)]
         workflow: Option<String>,
 
-        /// Show all states (default: running + successful only)
+        /// Show only running + successful (default: all states)
         #[arg(long)]
-        all: bool,
+        ok: bool,
 
         /// Maximum results
         #[arg(short = 'n', long, default_value = "15")]
@@ -604,7 +604,7 @@ async fn main() -> Result<()> {
                 repo: None,
                 actor: None,
                 workflow: None,
-                all: false,
+                ok: false,
                 max: 15,
             });
             match action {
@@ -614,7 +614,7 @@ async fn main() -> Result<()> {
                     repo,
                     actor,
                     workflow,
-                    all,
+                    ok,
                     max,
                 } => {
                     let config = github::load_github_config()?;
@@ -631,7 +631,7 @@ async fn main() -> Result<()> {
                     let filter = github::RunsFilter {
                         actor: actor.as_deref(),
                         workflow: workflow.as_deref(),
-                        show_all: all,
+                        success_only: ok,
                     };
                     let runs = github::get_workflow_runs(&config, &repo, &filter, max).await?;
                     github::display_workflow_runs(&runs, &repo);
