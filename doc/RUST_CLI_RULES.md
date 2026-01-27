@@ -13,30 +13,116 @@ Best practices distilled from project analysis and refactoring experience.
 - **Maximum 50 lines per function** - Extract helpers for longer functions
 - No file should contain more than 2-3 distinct responsibilities
 
-### Recommended Layout
+### Scalable CLI Layout
+Pattern: `hu <command> <subcommand>` (e.g., `hu jira list`, `hu gh prs`)
+
 ```
 src/
-  main.rs              # CLI parsing only (~200 lines)
-  lib.rs               # Library exports (if dual bin/lib)
-  errors.rs            # Custom error types
+  main.rs              # CLI entry, top-level dispatch only (~50 lines)
+  lib.rs               # Re-exports all modules
+  cli.rs               # Top-level CLI struct with #[command(flatten)]
+  errors.rs            # Shared error types
 
-  feature/
-    mod.rs             # Re-exports
-    types.rs           # Data structures
-    api.rs             # API/external calls
-    display.rs         # Table formatting, output
+  # Each command is a self-contained module
+  jira/
+    mod.rs             # pub use, Jira enum with subcommands
+    cli.rs             # #[derive(Subcommand)] enum JiraCommand
+    list.rs            # `hu jira list` handler
+    show.rs            # `hu jira show` handler
+    types.rs           # Jira-specific types
+    client.rs          # API client
 
-  commands/
+  gh/
     mod.rs
-    subcommand/
-      mod.rs
-      handlers.rs      # Command handlers
+    cli.rs             # #[derive(Subcommand)] enum GhCommand
+    prs.rs             # `hu gh prs` handler
+    runs.rs            # `hu gh runs` handler
+    types.rs
+    client.rs
+
+  # Shared utilities
+  shared/
+    mod.rs
+    table.rs           # Table formatting helpers
+    config.rs          # Config loading
+    http.rs            # HTTP client setup
 ```
 
+### Adding a New Command Module
+
+To add `hu slack <subcommand>`:
+
+1. Create `src/slack/mod.rs`:
+```rust
+mod cli;
+mod list;
+mod send;
+
+pub use cli::SlackCommand;
+```
+
+2. Create `src/slack/cli.rs`:
+```rust
+use clap::Subcommand;
+
+#[derive(Subcommand)]
+pub enum SlackCommand {
+    /// List channels
+    List,
+    /// Send a message
+    Send { channel: String, message: String },
+}
+
+impl SlackCommand {
+    pub async fn run(self) -> anyhow::Result<()> {
+        match self {
+            Self::List => list::run().await,
+            Self::Send { channel, message } => send::run(&channel, &message).await,
+        }
+    }
+}
+```
+
+3. Add to `src/cli.rs`:
+```rust
+use crate::slack::SlackCommand;
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// Jira operations
+    Jira {
+        #[command(subcommand)]
+        cmd: JiraCommand,
+    },
+    /// GitHub operations
+    Gh {
+        #[command(subcommand)]
+        cmd: GhCommand,
+    },
+    /// Slack operations  // <- ADD
+    Slack {
+        #[command(subcommand)]
+        cmd: SlackCommand,
+    },
+}
+```
+
+4. Add match arm in `main.rs`:
+```rust
+Command::Slack { cmd } => cmd.run().await,
+```
+
+### Module Isolation Rules
+- Each command module owns its CLI definition, types, and handlers
+- Modules only import from `shared/` and standard library
+- No cross-imports between command modules (jira/ never imports from gh/)
+- If two modules need the same code, extract to `shared/`
+
 ### Module Organization
-- Group by feature, not by type
-- Each module should have a single responsibility
+- Group by command, not by type
+- Each module is self-contained and independently testable
 - Use `mod.rs` for clean re-exports
+- Keep `main.rs` minimal—just CLI parsing and dispatch
 
 ---
 
