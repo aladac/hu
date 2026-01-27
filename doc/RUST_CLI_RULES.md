@@ -287,62 +287,68 @@ fn status_icon(status: &str, conclusion: Option<&str>) -> ColoredString
 
 ## 6. Testing
 
-### No Inline Tests
-**Never use `#[cfg(test)]` modules in source files.**
+### Test Location (Rust Convention)
+- **Unit tests**: Inline `#[cfg(test)]` modules (can test private functions)
+- **Integration tests**: `tests/` directory (tests public API only)
+- **Snapshot tests**: `tests/` with `insta`
 
 ```rust
-// BAD - inline test module
 // src/parser.rs
-pub fn parse(input: &str) -> Result<Data> { ... }
+fn parse_internal(s: &str) -> Result<Token> { ... }  // private helper
+
+pub fn parse(s: &str) -> Result<Ast> {
+    let token = parse_internal(s)?;
+    // ...
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn test_parse() { ... }
+    fn test_parse_internal() {
+        // Can test private function - this is the point of inline tests
+        assert!(parse_internal("valid").is_ok());
+    }
+
+    #[test]
+    fn test_parse() {
+        assert!(parse("input").is_ok());
+    }
 }
-
-// GOOD - separate test file
-// src/parser.rs
-pub fn parse(input: &str) -> Result<Data> { ... }
-
-// tests/parser_tests.rs
-use hu::parse;
-#[test]
-fn test_parse() { ... }
 ```
 
-**Why external tests:**
-- Keeps source files focused on implementation
-- Tests only access public API (better encapsulation)
-- Easier to find and navigate tests
-- Cleaner compilation units
-- Forces better module design
+```rust
+// tests/integration.rs - tests public API only
+use hu::parse;
+
+#[test]
+fn test_parse_end_to_end() {
+    // Can only access pub items from hu crate
+    assert!(parse("input").is_ok());
+}
+```
 
 ### Test Directory Structure
 ```
+src/
+  parser.rs          # Contains #[cfg(test)] mod tests inline
+  config.rs          # Contains #[cfg(test)] mod tests inline
+
 tests/
-  unit_tests/
-    mod.rs
-    parser.rs        # Unit tests for src/parser.rs
-    config.rs        # Unit tests for src/config.rs
-  integration_tests/
-    mod.rs
-    cli.rs           # End-to-end CLI tests
-    api.rs           # API integration tests
+  integration.rs     # Integration tests (public API)
+  cli.rs             # CLI end-to-end tests
   fixtures/
     sample.json      # Test data files
   snapshots/         # insta snapshot files (auto-generated)
+
+benches/
+  parser_bench.rs    # Benchmarks with criterion
 ```
 
-### Test File Naming
-- `tests/unit_tests/{module}.rs` - mirrors `src/{module}.rs`
-- `tests/integration_tests/{feature}.rs` - tests features end-to-end
-- Entry points: `tests/unit.rs`, `tests/integration.rs`
-
 ### Test Types
-- **Unit tests** - Test individual functions, use mocks
-- **Integration tests** - Test CLI commands, real I/O
+- **Unit tests** - Inline `#[cfg(test)]`, test private + public functions
+- **Integration tests** - `tests/` directory, test public API, CLI commands
 - **Snapshot tests** - Use `insta` for output formatting
 - **Benchmarks** - Use `criterion` in `benches/`
 
@@ -481,7 +487,8 @@ impl EksService {
 - [ ] Common patterns extracted to helpers
 
 **Testing:**
-- [ ] Tests in `tests/` directory (no inline `#[cfg(test)]`)
+- [ ] Unit tests inline with `#[cfg(test)]` modules
+- [ ] Integration tests in `tests/` directory
 - [ ] Snapshot tests for output formatting
 
 **Tooling:**
