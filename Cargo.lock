@@ -458,6 +458,7 @@ dependencies = [
  "octocrab",
  "serde",
  "serde_json",
+ "terminal_size",
  "tokio",
  "toml",
 ]

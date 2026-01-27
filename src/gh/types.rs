@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// CI check status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CiStatus {
+    Success,
+    Pending,
+    Failed,
+    #[default]
+    Unknown,
+}
+
 /// Pull request data for display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
@@ -10,6 +20,8 @@ pub struct PullRequest {
     pub repo_full_name: String,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip)]
+    pub ci_status: Option<CiStatus>,
 }
 
 #[cfg(test)]
@@ -26,6 +38,7 @@ mod tests {
             repo_full_name: "org/repo".to_string(),
             created_at: "2024-01-15T10:00:00Z".to_string(),
             updated_at: "2024-01-15T12:00:00Z".to_string(),
+            ci_status: None,
         };
 
         let json = serde_json::to_string(&pr).unwrap();

@@ -1,103 +1,102 @@
 use anyhow::Result;
 
 use super::client::GithubClient;
-use super::types::PullRequest;
+use super::types::CiStatus;
+
+// ANSI color codes
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const RED: &str = "\x1b[31m";
+const GRAY: &str = "\x1b[90m";
+const RESET: &str = "\x1b[0m";
 
 /// Handle the `hu gh prs` command
 pub async fn run() -> Result<()> {
     let client = GithubClient::new()?;
-    let prs = client.list_user_prs().await?;
+    let mut prs = client.list_user_prs().await?;
 
     if prs.is_empty() {
         println!("No open pull requests found.");
         return Ok(());
     }
 
+    // Fetch CI status for each PR
+    for pr in &mut prs {
+        let parts: Vec<&str> = pr.repo_full_name.split('/').collect();
+        if parts.len() == 2 {
+            if let Ok(status) = client.get_ci_status(parts[0], parts[1], pr.number).await {
+                pr.ci_status = Some(status);
+            }
+        }
+    }
+
     print_prs_table(&prs);
     Ok(())
 }
 
-fn print_prs_table(prs: &[PullRequest]) {
-    // Calculate column widths
-    let num_width = prs
-        .iter()
-        .map(|p| p.number.to_string().len())
-        .max()
-        .unwrap_or(2);
-    let repo_width = prs
-        .iter()
-        .map(|p| p.repo_full_name.len())
-        .max()
-        .unwrap_or(10)
-        .min(30);
-    let title_width = 50;
+fn get_terminal_width() -> usize {
+    terminal_size::terminal_size()
+        .map(|(w, _)| w.0 as usize)
+        .unwrap_or(80)
+}
 
-    // Print header
+fn print_prs_table(prs: &[super::types::PullRequest]) {
+    let term_width = get_terminal_width();
+
+    // Calculate max link length
+    let max_link_len = prs.iter().map(|p| p.html_url.len()).max().unwrap_or(40);
+
+    // Layout: │ S │ Title... │ Link │
+    // Borders take: 1 + 1 + 3 + 3 + 1 = 9 chars (│ S │ ... │ ... │)
+    let status_col = 1;
+    let border_overhead = 10; // "│ " + " │ " + " │ " + "│"
+
+    let available = term_width.saturating_sub(border_overhead + status_col + max_link_len);
+    let title_width = available.max(20);
+    let link_width = max_link_len;
+
+    // Top border
     println!(
-        "{:>num_width$}  {:<repo_width$}  {:<title_width$}  Updated",
-        "#",
-        "Repository",
-        "Title",
-        num_width = num_width,
-        repo_width = repo_width,
-        title_width = title_width
-    );
-    println!(
-        "{:->num_width$}  {:->repo_width$}  {:->title_width$}  {:->19}",
-        "",
-        "",
-        "",
-        "",
-        num_width = num_width,
-        repo_width = repo_width,
-        title_width = title_width
+        "┌───┬{}┬{}┐",
+        "─".repeat(title_width + 2),
+        "─".repeat(link_width + 2)
     );
 
-    // Print rows
+    // Rows
     for pr in prs {
+        let status_icon = match pr.ci_status.unwrap_or(CiStatus::Unknown) {
+            CiStatus::Success => format!("{}{}{}", GREEN, "✓", RESET),
+            CiStatus::Pending => format!("{}{}{}", YELLOW, "◐", RESET),
+            CiStatus::Failed => format!("{}{}{}", RED, "✗", RESET),
+            CiStatus::Unknown => format!("{}{}{}", GRAY, "○", RESET),
+        };
+
         let title = truncate(&pr.title, title_width);
-        let repo = truncate(&pr.repo_full_name, repo_width);
-        let updated = format_time(&pr.updated_at);
+        let link = format!("{}{}{}", GRAY, &pr.html_url, RESET);
 
         println!(
-            "{:>num_width$}  {:<repo_width$}  {:<title_width$}  {}",
-            pr.number,
-            repo,
+            "│ {} │ {:<width$} │ {} │",
+            status_icon,
             title,
-            updated,
-            num_width = num_width,
-            repo_width = repo_width,
-            title_width = title_width
+            link,
+            width = title_width
         );
     }
+
+    // Bottom border
+    println!(
+        "└───┴{}┴{}┘",
+        "─".repeat(title_width + 2),
+        "─".repeat(link_width + 2)
+    );
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
-    }
-}
-
-fn format_time(iso_time: &str) -> String {
-    // Simple relative time formatting
-    // In a real implementation, use chrono or similar
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso_time) {
-        let now = chrono::Utc::now();
-        let duration = now.signed_duration_since(dt);
-
-        if duration.num_days() > 0 {
-            format!("{}d ago", duration.num_days())
-        } else if duration.num_hours() > 0 {
-            format!("{}h ago", duration.num_hours())
-        } else if duration.num_minutes() > 0 {
-            format!("{}m ago", duration.num_minutes())
-        } else {
-            "just now".to_string()
-        }
-    } else {
-        iso_time.to_string()
+        let truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
+        format!("{}…", truncated)
     }
 }
 
@@ -112,7 +111,7 @@ mod tests {
 
     #[test]
     fn truncate_long_string() {
-        assert_eq!(truncate("hello world", 8), "hello...");
+        assert_eq!(truncate("hello world", 8), "hello w…");
     }
 
     #[test]
@@ -121,29 +120,9 @@ mod tests {
     }
 
     #[test]
-    fn format_time_recent() {
-        let now = chrono::Utc::now();
-        let iso = now.to_rfc3339();
-        let formatted = format_time(&iso);
-        assert!(
-            formatted.contains("just now")
-                || formatted.contains("m ago")
-                || formatted.contains("h ago")
-        );
-    }
-
-    #[test]
-    fn format_time_days_ago() {
-        let past = chrono::Utc::now() - chrono::Duration::days(5);
-        let iso = past.to_rfc3339();
-        let formatted = format_time(&iso);
-        assert!(formatted.contains("5d ago"));
-    }
-
-    #[test]
-    fn format_time_invalid() {
-        let invalid = "not-a-date";
-        let formatted = format_time(invalid);
-        assert_eq!(formatted, "not-a-date");
+    fn status_icons_render() {
+        let _ = format!("{}✓{}", GREEN, RESET);
+        let _ = format!("{}◐{}", YELLOW, RESET);
+        let _ = format!("{}✗{}", RED, RESET);
     }
 }

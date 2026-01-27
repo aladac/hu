@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use octocrab::Octocrab;
 
 use super::auth::get_token;
-use super::types::PullRequest;
+use super::types::{CiStatus, PullRequest};
 
 pub struct GithubClient {
     client: Octocrab,
@@ -70,11 +70,90 @@ impl GithubClient {
                     repo_full_name,
                     created_at: issue.created_at.to_rfc3339(),
                     updated_at: issue.updated_at.to_rfc3339(),
+                    ci_status: None,
                 })
             })
             .collect();
 
         Ok(prs)
+    }
+
+    /// Get CI status for a PR
+    pub async fn get_ci_status(&self, owner: &str, repo: &str, pr_number: u64) -> Result<CiStatus> {
+        // Get the PR to find the head SHA
+        let pr = self
+            .client
+            .pulls(owner, repo)
+            .get(pr_number)
+            .await
+            .context("Failed to get PR")?;
+
+        let sha = &pr.head.sha;
+
+        // Get combined status
+        let status: serde_json::Value = self
+            .client
+            .get(
+                format!("/repos/{}/{}/commits/{}/status", owner, repo, sha),
+                None::<&()>,
+            )
+            .await
+            .context("Failed to get commit status")?;
+
+        let state = status["state"].as_str().unwrap_or("unknown");
+
+        // Also check for check runs (GitHub Actions uses this)
+        let checks: serde_json::Value = self
+            .client
+            .get(
+                format!("/repos/{}/{}/commits/{}/check-runs", owner, repo, sha),
+                None::<&()>,
+            )
+            .await
+            .unwrap_or_default();
+
+        let check_runs = checks["check_runs"].as_array();
+
+        // Determine overall status
+        let ci_status = if let Some(runs) = check_runs {
+            if runs.is_empty() && state == "pending" {
+                CiStatus::Pending
+            } else {
+                let any_failed = runs
+                    .iter()
+                    .any(|r| r["conclusion"].as_str() == Some("failure"));
+                let any_pending = runs.iter().any(|r| {
+                    r["status"].as_str() != Some("completed") || r["conclusion"].as_str().is_none()
+                });
+                let all_success = runs
+                    .iter()
+                    .all(|r| r["conclusion"].as_str() == Some("success"));
+
+                if any_failed {
+                    CiStatus::Failed
+                } else if any_pending {
+                    CiStatus::Pending
+                } else if all_success && !runs.is_empty() {
+                    CiStatus::Success
+                } else {
+                    match state {
+                        "success" => CiStatus::Success,
+                        "pending" => CiStatus::Pending,
+                        "failure" | "error" => CiStatus::Failed,
+                        _ => CiStatus::Unknown,
+                    }
+                }
+            }
+        } else {
+            match state {
+                "success" => CiStatus::Success,
+                "pending" => CiStatus::Pending,
+                "failure" | "error" => CiStatus::Failed,
+                _ => CiStatus::Unknown,
+            }
+        };
+
+        Ok(ci_status)
     }
 
     /// Verify the client is authenticated by checking the current user
