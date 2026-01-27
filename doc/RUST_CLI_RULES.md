@@ -43,9 +43,10 @@ src/
   # Utilities (name by purpose, not "shared")
   util/
     mod.rs
-    http.rs            # HTTP client setup
-    config.rs          # Config loading
+    http.rs            # HTTP client setup, retries
+    config.rs          # Config loading/saving
     output.rs          # Output format handling (--json, --table)
+    fmt.rs             # Humanization: time_ago, duration, bytes, inflection
     ui/
       mod.rs           # UI re-exports
       table.rs         # Ratatui table helpers
@@ -92,9 +93,11 @@ If implementing something that looks reusable, **start in `util/`**, not in the 
 | Tables (ratatui) | `util/ui/table.rs` | `gh/display.rs` |
 | Colored status badges | `util/ui/status.rs` | `gh/display.rs` |
 | Progress spinners | `util/ui/progress.rs` | `jira/tickets.rs` |
+| Time ago, durations | `util/fmt.rs` | `gh/runs.rs` |
+| Byte size formatting | `util/fmt.rs` | `jira/tickets.rs` |
+| Pluralize/inflection | `util/fmt.rs` | `jira/display.rs` |
 | Config file loading | `util/config.rs` | `jira/config.rs` |
 | HTTP client with retries | `util/http.rs` | `jira/client.rs` |
-| Date/time formatting | `util/time.rs` | `gh/runs.rs` |
 
 **Rule:** When in doubt, put it in `util/`. Moving from `util/` to module-specific is easy; extracting from module to `util/` later is a refactor.
 
@@ -736,27 +739,54 @@ cargo insta review  # review snapshot changes
 - **Inflector** - pluralize, singularize, case conversion
 - **humansize** - Bytes → "1.43 MiB"
 
+Put wrappers in `util/fmt.rs`:
+
 ```rust
+// util/fmt.rs - Humanization helpers
+use std::time::Duration;
 use timeago::Formatter;
 use humantime::format_duration;
 use inflector::Inflector;
 use humansize::{format_size, BINARY};
 
-// Time ago
-let formatter = Formatter::new();
-formatter.convert(Duration::from_secs(3600));   // "1 hour ago"
+/// "2 hours ago", "in 3 days"
+pub fn time_ago(duration: Duration) -> String {
+    Formatter::new().convert(duration)
+}
 
-// Duration formatting
-format_duration(Duration::from_secs(5432));     // "1h 30m 32s"
+/// "1h 30m 32s"
+pub fn duration(d: Duration) -> String {
+    format_duration(d).to_string()
+}
 
-// String inflection
-"user".to_plural();                             // "users"
-"posts".to_singular();                          // "post"
-"user_account".to_class_case();                 // "UserAccount"
-1.ordinalize();                                 // "1st"
+/// 1500000 → "1.43 MiB"
+pub fn bytes(size: u64) -> String {
+    format_size(size, BINARY)
+}
 
-// Byte sizes
-format_size(1_500_000u64, BINARY);              // "1.43 MiB"
+/// "user" → "users"
+pub fn pluralize(s: &str) -> String {
+    s.to_plural()
+}
+
+/// "posts" → "post"
+pub fn singularize(s: &str) -> String {
+    s.to_singular()
+}
+
+/// 1 → "1st", 2 → "2nd"
+pub fn ordinalize(n: i64) -> String {
+    n.ordinalize()
+}
+```
+
+Usage in handlers:
+```rust
+use crate::util::fmt;
+
+println!("Updated {}", fmt::time_ago(last_modified));
+println!("Size: {}", fmt::bytes(file_size));
+println!("Found {} {}", count, fmt::pluralize("ticket"));
 ```
 
 ### Dev Dependencies
