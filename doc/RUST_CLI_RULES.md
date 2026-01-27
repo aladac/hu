@@ -118,6 +118,71 @@ Command::Slack { cmd } => cmd.run().await,
 - No cross-imports between command modules (jira/ never imports from gh/)
 - If two modules need the same code, extract to `shared/`
 
+### Internal Module Structure
+Separate base infrastructure from subcommand handlers:
+
+```
+jira/
+  # Base infrastructure (shared within module)
+  mod.rs             # Re-exports, CLI enum definition
+  client.rs          # API client, HTTP calls
+  config.rs          # Module-specific config loading
+  types.rs           # Data structures, API responses
+  display.rs         # Table formatting, output helpers
+  auth.rs            # Authentication flow
+
+  # Subcommand handlers (one file per subcommand)
+  sprint.rs          # `hu jira sprint` → uses client, types, display
+  tickets.rs         # `hu jira tickets` → uses client, types, display
+
+gh/
+  mod.rs
+  client.rs          # GitHub API client
+  types.rs
+
+  # Handlers
+  prs.rs             # `hu gh prs`
+  runs.rs            # `hu gh runs`
+  failures.rs        # `hu gh failures`
+
+git/
+  mod.rs
+
+  # Handlers (no client needed - shells out to git)
+  branch.rs          # `hu git branch`
+  commit.rs          # `hu git commit`
+```
+
+**Base files** (infrastructure):
+| File | Purpose |
+|------|---------|
+| `client.rs` | API client, HTTP requests |
+| `config.rs` | Load/save module config |
+| `types.rs` | Structs for API responses |
+| `display.rs` | Format output, tables |
+| `auth.rs` | OAuth, tokens, login flow |
+
+**Handler files** (one per subcommand):
+| File | Purpose |
+|------|---------|
+| `{subcommand}.rs` | Single handler, imports base files |
+
+**Handler file pattern:**
+```rust
+// src/jira/sprint.rs
+use super::{client::JiraClient, display, types::Sprint};
+
+pub async fn run(client: &JiraClient) -> anyhow::Result<()> {
+    let sprints = client.get_sprints().await?;
+    display::print_sprints(&sprints);
+    Ok(())
+}
+```
+
+**When to split further:**
+- Handler file > 200 lines → extract helpers to `{subcommand}/mod.rs` + subfiles
+- Shared logic between 2+ handlers → extract to base file or new `helpers.rs`
+
 ### Module Organization
 - Group by command, not by type
 - Each module is self-contained and independently testable
