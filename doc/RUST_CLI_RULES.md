@@ -688,6 +688,33 @@ cargo insta review  # review snapshot changes
 - Domain-specific logic unique to your app
 - When existing crates don't fit and wrapping is harder than implementing
 
+### Ask Before Adding Dependencies
+
+**Always ask the user** before adding new crates. Present choices:
+
+**When feature is simple:**
+> "This feature is simple. We only need one method from `chrono`.
+> Do you want me to:
+> 1. Add `chrono` (recommended - handles edge cases)
+> 2. Implement manually (~10 lines)"
+
+**When multiple solutions exist:**
+> "There are multiple crates for HTTP retries:
+> 1. `backoff` - simple, sync-focused
+> 2. `tokio-retry` - async-native, minimal
+> 3. `reqwest-retry` - reqwest middleware
+>
+> Which do you prefer?"
+
+**When crate seems heavy:**
+> "For UUID generation, options are:
+> 1. `uuid` crate (full UUID support, 50kb)
+> 2. Manual with `rand` (v4 only, already have rand)
+>
+> We only need v4 UUIDs. Preference?"
+
+**Don't silently add dependencies** — the user should know what's being added and why.
+
 ### Core Crates
 - **clap** (derive) - CLI parsing
 - **colored** - Terminal colors
