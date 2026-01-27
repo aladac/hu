@@ -1,15 +1,89 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
-#[derive(Parser)]
-#[command(name = "hu")]
-#[command(about = "Dev workflow CLI", long_about = None)]
-#[command(version)]
-struct Cli {
-    // Future: #[command(subcommand)] cmd: Commands
-}
+mod cli;
+mod dashboard;
+mod eks;
+mod gh;
+mod jira;
+mod newrelic;
+mod pagerduty;
+mod sentry;
+mod slack;
+
+use cli::{Cli, Command};
 
 fn main() -> anyhow::Result<()> {
-    let _cli = Cli::parse();
-    println!("hu - dev workflow CLI");
+    let cli = Cli::parse();
+
+    match cli.command {
+        Some(cmd) => run_command(cmd),
+        None => {
+            Cli::command().print_help()?;
+            println!();
+            Ok(())
+        }
+    }
+}
+
+fn run_command(cmd: Command) -> anyhow::Result<()> {
+    match cmd {
+        Command::Dashboard { cmd } => {
+            println!("dashboard: {:?}", cmd);
+        }
+        Command::Jira { cmd: Some(cmd) } => {
+            println!("jira: {:?}", cmd);
+        }
+        Command::Jira { cmd: None } => {
+            print_subcommand_help("jira")?;
+        }
+        Command::Gh { cmd: Some(cmd) } => {
+            println!("gh: {:?}", cmd);
+        }
+        Command::Gh { cmd: None } => {
+            print_subcommand_help("gh")?;
+        }
+        Command::Slack { cmd: Some(cmd) } => {
+            println!("slack: {:?}", cmd);
+        }
+        Command::Slack { cmd: None } => {
+            print_subcommand_help("slack")?;
+        }
+        Command::PagerDuty { cmd: Some(cmd) } => {
+            println!("pagerduty: {:?}", cmd);
+        }
+        Command::PagerDuty { cmd: None } => {
+            print_subcommand_help("pagerduty")?;
+        }
+        Command::Sentry { cmd: Some(cmd) } => {
+            println!("sentry: {:?}", cmd);
+        }
+        Command::Sentry { cmd: None } => {
+            print_subcommand_help("sentry")?;
+        }
+        Command::NewRelic { cmd: Some(cmd) } => {
+            println!("newrelic: {:?}", cmd);
+        }
+        Command::NewRelic { cmd: None } => {
+            print_subcommand_help("newrelic")?;
+        }
+        Command::Eks { cmd: Some(cmd) } => {
+            println!("eks: {:?}", cmd);
+        }
+        Command::Eks { cmd: None } => {
+            print_subcommand_help("eks")?;
+        }
+    }
+    Ok(())
+}
+
+fn print_subcommand_help(name: &str) -> anyhow::Result<()> {
+    let mut cmd = Cli::command();
+    for sub in cmd.get_subcommands_mut() {
+        if sub.get_name() == name {
+            sub.print_help()?;
+            println!();
+            return Ok(());
+        }
+    }
     Ok(())
 }
