@@ -1251,6 +1251,80 @@ hu dashboard --only jira,gh     # Just Jira and GitHub
 hu dashboard --except slack     # Everything except Slack
 ```
 
+### Output Standards (Pretty by Default)
+
+**All CLI output must be visually polished.** Use ratatui for everything:
+
+```
+┌─ Jira Sprint Tasks ──────────────────────────────────────────┐
+│ #   │ Key        │ Summary                     │ Status      │
+├─────┼────────────┼─────────────────────────────┼─────────────┤
+│ 1   │ PROJ-123   │ Fix login redirect          │ ✓ Done      │
+│ 2   │ PROJ-456   │ Add caching layer           │ ◐ Progress  │
+│ 3   │ PROJ-789   │ Update dependencies         │ ○ Todo      │
+└─────┴────────────┴─────────────────────────────┴─────────────┘
+```
+
+**Color conventions:**
+| Element | Color | Usage |
+|---------|-------|-------|
+| Success/Done | Green | Completed, passing, resolved |
+| Warning/In Progress | Yellow | Pending, in progress, needs attention |
+| Error/Critical | Red | Failed, errors, urgent alerts |
+| Info/Neutral | Cyan/Blue | Informational, links, counts |
+| Muted | Gray | Secondary info, timestamps |
+
+**Status icons:**
+```rust
+// util/ui/status.rs
+pub fn status_icon(status: &str) -> &'static str {
+    match status.to_lowercase().as_str() {
+        "done" | "success" | "resolved" | "closed" => "✓",
+        "in_progress" | "running" | "pending" => "◐",
+        "todo" | "open" | "new" => "○",
+        "failed" | "error" | "critical" => "✗",
+        "warning" | "acknowledged" => "⚠",
+        "blocked" => "⊘",
+        _ => "•",
+    }
+}
+
+pub fn status_color(status: &str) -> Color {
+    match status.to_lowercase().as_str() {
+        "done" | "success" | "resolved" => Color::Green,
+        "in_progress" | "running" => Color::Yellow,
+        "todo" | "open" => Color::White,
+        "failed" | "error" | "critical" => Color::Red,
+        "warning" | "acknowledged" => Color::Yellow,
+        _ => Color::Gray,
+    }
+}
+```
+
+**Dashboard summary style:**
+```rust
+// Counts with color-coded severity
+pub fn render_dashboard_line(icon: &str, count: usize, label: &str, style: Style) -> Line {
+    Line::from(vec![
+        Span::raw(format!(" {} ", icon)),
+        Span::styled(format!("{}", count), style.bold()),
+        Span::raw(format!(" {}", label)),
+    ])
+}
+
+// Example output:
+// 🚨 3 active alerts        <- Red if count > 0
+// ✓ 0 active alerts         <- Green if count == 0
+```
+
+**Rules:**
+- Tables for any list > 2 items
+- Colors for all status indicators
+- Icons for quick visual scanning
+- Consistent spacing and alignment
+- Borders for grouped content
+- No plain `println!` for user-facing output
+
 ### Separation of Concerns
 - CLI parsing in `main.rs`
 - Business logic in services (interface-agnostic)
