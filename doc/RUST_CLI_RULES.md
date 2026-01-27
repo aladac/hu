@@ -483,6 +483,102 @@ fn status_icon(status: &str, conclusion: Option<&str>) -> ColoredString
 
 ## 6. Testing
 
+### Write Testable Code
+
+**"Hard to test" or "impossible to test" is not acceptable.** Design for testability from the start.
+
+**Separate logic from side effects:**
+```rust
+// BAD - logic mixed with I/O, untestable
+fn save_config(config: &Config) -> Result<()> {
+    let json = serde_json::to_string(config)?;
+    std::fs::write("config.json", json)?;  // Can't test without FS
+    Ok(())
+}
+
+// GOOD - logic separated, I/O at the boundary
+fn serialize_config(config: &Config) -> Result<String> {
+    serde_json::to_string_pretty(config).map_err(Into::into)
+}
+
+fn save_config(config: &Config, path: &Path) -> Result<()> {
+    let json = serialize_config(config)?;  // Test this
+    std::fs::write(path, json)?;           // Don't test this
+    Ok(())
+}
+```
+
+**What to test vs what to mock:**
+
+| Test the logic | Mock/stub the boundary |
+|----------------|------------------------|
+| JSON/data serialization | File system writes |
+| Request building | Network calls |
+| Response parsing | HTTP client |
+| Query construction | Database calls |
+| Business rules | External APIs |
+| Data transformation | System calls |
+
+**Use traits for external dependencies:**
+```rust
+// Define trait for external dependency
+pub trait JiraApi {
+    async fn get_tickets(&self) -> Result<Vec<Ticket>>;
+}
+
+// Real implementation
+pub struct JiraClient { /* ... */ }
+impl JiraApi for JiraClient {
+    async fn get_tickets(&self) -> Result<Vec<Ticket>> {
+        // actual HTTP call
+    }
+}
+
+// Handler accepts trait, not concrete type
+pub async fn list_tickets(api: &impl JiraApi) -> Result<()> {
+    let tickets = api.get_tickets().await?;
+    // process tickets...
+    Ok(())
+}
+
+// In tests: mock implementation
+#[cfg(test)]
+mod tests {
+    struct MockJira { tickets: Vec<Ticket> }
+    impl JiraApi for MockJira {
+        async fn get_tickets(&self) -> Result<Vec<Ticket>> {
+            Ok(self.tickets.clone())
+        }
+    }
+
+    #[test]
+    fn test_list_tickets() {
+        let mock = MockJira { tickets: vec![/* test data */] };
+        assert!(list_tickets(&mock).await.is_ok());
+    }
+}
+```
+
+**Test expectations on arguments:**
+```rust
+// Verify the request is built correctly, don't send it
+#[test]
+fn test_build_jira_request() {
+    let req = build_ticket_request("PROJ-123", &options);
+
+    assert_eq!(req.url(), "https://jira.example.com/rest/api/3/issue/PROJ-123");
+    assert_eq!(req.method(), "GET");
+    assert!(req.headers().contains_key("Authorization"));
+}
+```
+
+**Rules:**
+- Never write code that "can't be tested"
+- If something is hard to test, refactor to make it testable
+- Push I/O to the edges, keep core logic pure
+- Accept traits/interfaces, not concrete implementations
+- Test the logic, mock the boundaries
+
 ### Test Location (Rust Convention)
 - **Unit tests**: Inline `#[cfg(test)]` modules (can test private functions)
 - **Integration tests**: `tests/` directory (tests public API only)
@@ -683,9 +779,11 @@ impl EksService {
 - [ ] Common patterns extracted to helpers
 
 **Testing:**
+- [ ] Code is testable (logic separated from I/O)
+- [ ] External deps use traits (mockable)
 - [ ] Unit tests inline with `#[cfg(test)]` modules
 - [ ] Integration tests in `tests/` directory
-- [ ] Snapshot tests for output formatting
+- [ ] No "hard to test" code accepted
 
 **Tooling:**
 - [ ] `clippy.toml` and `rustfmt.toml` configured
