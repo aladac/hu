@@ -187,3 +187,64 @@ fn eks_list_runs() {
         .expect("failed to execute");
     assert!(output.status.success());
 }
+
+// GitHub subcommand tests
+
+#[test]
+fn gh_help_shows_subcommands() {
+    let output = hu()
+        .args(["gh", "--help"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("login"));
+    assert!(stdout.contains("prs"));
+    assert!(stdout.contains("runs"));
+    assert!(stdout.contains("failures"));
+    assert!(stdout.contains("ci"));
+}
+
+#[test]
+fn gh_failures_help() {
+    let output = hu()
+        .args(["gh", "failures", "--help"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--pr"));
+    assert!(stdout.contains("--repo"));
+}
+
+#[test]
+fn gh_runs_executes() {
+    let output = hu()
+        .args(["gh", "runs"])
+        .output()
+        .expect("failed to execute");
+    // This returns "not yet implemented" but exits successfully
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("not yet implemented"));
+}
+
+#[test]
+fn gh_ci_executes() {
+    let output = hu().args(["gh", "ci"]).output().expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("not yet implemented"));
+}
+
+#[test]
+fn gh_login_requires_token() {
+    let output = hu()
+        .args(["gh", "login"])
+        .output()
+        .expect("failed to execute");
+    // Should fail because --token is required
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--token") || stderr.contains("required"));
+}

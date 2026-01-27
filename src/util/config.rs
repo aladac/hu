@@ -66,6 +66,13 @@ mod tests {
     }
 
     #[test]
+    fn credentials_path_is_in_config_dir() {
+        let path = credentials_path().unwrap();
+        assert!(path.to_string_lossy().contains("hu"));
+        assert!(path.to_string_lossy().ends_with("credentials.toml"));
+    }
+
+    #[test]
     fn credentials_serialize_deserialize() {
         let creds = Credentials {
             github: Some(GithubCredentials {
@@ -94,5 +101,70 @@ mod tests {
         let toml_str = "";
         let creds: Credentials = toml::from_str(toml_str).unwrap();
         assert!(creds.github.is_none());
+    }
+
+    #[test]
+    fn credentials_toml_format() {
+        let creds = Credentials {
+            github: Some(GithubCredentials {
+                token: "ghp_abc123".to_string(),
+                username: "octocat".to_string(),
+            }),
+        };
+
+        let toml_str = toml::to_string_pretty(&creds).unwrap();
+        assert!(toml_str.contains("[github]"));
+        assert!(toml_str.contains("token = \"ghp_abc123\""));
+        assert!(toml_str.contains("username = \"octocat\""));
+    }
+
+    #[test]
+    fn github_credentials_clone() {
+        let creds = GithubCredentials {
+            token: "token".to_string(),
+            username: "user".to_string(),
+        };
+        let cloned = creds.clone();
+        assert_eq!(cloned.token, creds.token);
+        assert_eq!(cloned.username, creds.username);
+    }
+
+    #[test]
+    fn credentials_debug_format() {
+        let creds = Credentials::default();
+        let debug_str = format!("{:?}", creds);
+        assert!(debug_str.contains("Credentials"));
+    }
+
+    #[test]
+    fn github_credentials_debug_format() {
+        let creds = GithubCredentials {
+            token: "token".to_string(),
+            username: "user".to_string(),
+        };
+        let debug_str = format!("{:?}", creds);
+        assert!(debug_str.contains("GithubCredentials"));
+    }
+
+    #[test]
+    fn load_credentials_handles_missing_file() {
+        // load_credentials returns Ok with default if file doesn't exist
+        // This tests the path exists check
+        let result = load_credentials();
+        // Either returns existing creds or default
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn credentials_path_parent_exists() {
+        let path = credentials_path().unwrap();
+        let parent = path.parent();
+        assert!(parent.is_some());
+    }
+
+    #[test]
+    fn config_dir_is_absolute() {
+        let dir = config_dir().unwrap();
+        assert!(dir.is_absolute());
     }
 }

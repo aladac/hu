@@ -103,6 +103,7 @@ fn truncate(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gh::types::PullRequest;
 
     #[test]
     fn truncate_short_string() {
@@ -120,9 +121,118 @@ mod tests {
     }
 
     #[test]
+    fn truncate_unicode() {
+        // Unicode chars are counted by char, not byte
+        assert_eq!(truncate("héllo", 5), "héllo");
+        assert_eq!(truncate("héllo world", 6), "héllo…");
+    }
+
+    #[test]
+    fn truncate_empty() {
+        assert_eq!(truncate("", 10), "");
+    }
+
+    #[test]
+    fn truncate_zero_length() {
+        // Edge case: max_len = 0 means we try to take 0 chars + ellipsis
+        // saturating_sub(1) on 0 = 0, so we get just "…" if string is not empty
+        let result = truncate("hello", 0);
+        // With max_len=0, chars.count()=5 > 0, so we truncate
+        // take(0.saturating_sub(1)) = take(0), so we get "" + "…" = "…"
+        assert_eq!(result, "…");
+    }
+
+    #[test]
     fn status_icons_render() {
         let _ = format!("{}✓{}", GREEN, RESET);
         let _ = format!("{}◐{}", YELLOW, RESET);
         let _ = format!("{}✗{}", RED, RESET);
+    }
+
+    #[test]
+    fn get_terminal_width_returns_reasonable_value() {
+        let width = get_terminal_width();
+        // Should return at least 80 (default) or actual terminal width
+        assert!(width >= 20);
+    }
+
+    #[test]
+    fn status_icon_formatting_success() {
+        let icon = format!("{}{}{}", GREEN, "✓", RESET);
+        assert!(icon.contains("✓"));
+        assert!(icon.starts_with("\x1b[32m"));
+        assert!(icon.ends_with("\x1b[0m"));
+    }
+
+    #[test]
+    fn status_icon_formatting_pending() {
+        let icon = format!("{}{}{}", YELLOW, "◐", RESET);
+        assert!(icon.contains("◐"));
+    }
+
+    #[test]
+    fn status_icon_formatting_failed() {
+        let icon = format!("{}{}{}", RED, "✗", RESET);
+        assert!(icon.contains("✗"));
+    }
+
+    #[test]
+    fn status_icon_formatting_unknown() {
+        let icon = format!("{}{}{}", GRAY, "○", RESET);
+        assert!(icon.contains("○"));
+    }
+
+    #[test]
+    fn print_prs_table_renders_without_panic() {
+        let prs = vec![
+            PullRequest {
+                number: 1,
+                title: "Short title".to_string(),
+                html_url: "https://github.com/o/r/pull/1".to_string(),
+                state: "open".to_string(),
+                repo_full_name: "o/r".to_string(),
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                ci_status: Some(CiStatus::Success),
+            },
+            PullRequest {
+                number: 2,
+                title: "A very long title that will definitely need truncation because it exceeds the available width".to_string(),
+                html_url: "https://github.com/owner/repo/pull/2".to_string(),
+                state: "open".to_string(),
+                repo_full_name: "owner/repo".to_string(),
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                ci_status: Some(CiStatus::Failed),
+            },
+            PullRequest {
+                number: 3,
+                title: "Pending PR".to_string(),
+                html_url: "https://github.com/o/r/pull/3".to_string(),
+                state: "open".to_string(),
+                repo_full_name: "o/r".to_string(),
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                ci_status: Some(CiStatus::Pending),
+            },
+            PullRequest {
+                number: 4,
+                title: "Unknown status".to_string(),
+                html_url: "https://github.com/o/r/pull/4".to_string(),
+                state: "open".to_string(),
+                repo_full_name: "o/r".to_string(),
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                ci_status: None,
+            },
+        ];
+        // This just verifies it doesn't panic
+        print_prs_table(&prs);
+    }
+
+    #[test]
+    fn print_prs_table_empty_list() {
+        let prs: Vec<PullRequest> = vec![];
+        print_prs_table(&prs);
     }
 }

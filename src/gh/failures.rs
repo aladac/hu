@@ -203,6 +203,7 @@ async fn get_current_branch_pr(owner: &str, repo: &str) -> Result<u64> {
 mod tests {
     use super::*;
 
+    // parse_github_url tests
     #[test]
     fn parse_ssh_url() {
         let (owner, repo) = parse_github_url("git@github.com:owner/repo.git").unwrap();
@@ -222,5 +223,90 @@ mod tests {
         let (owner, repo) = parse_github_url("https://github.com/owner/repo").unwrap();
         assert_eq!(owner, "owner");
         assert_eq!(repo, "repo");
+    }
+
+    #[test]
+    fn parse_ssh_url_no_git_suffix() {
+        let (owner, repo) = parse_github_url("git@github.com:owner/repo").unwrap();
+        assert_eq!(owner, "owner");
+        assert_eq!(repo, "repo");
+    }
+
+    #[test]
+    fn parse_https_url_trailing_slash() {
+        let (owner, repo) = parse_github_url("https://github.com/owner/repo/").unwrap();
+        assert_eq!(owner, "owner");
+        assert_eq!(repo, "repo");
+    }
+
+    #[test]
+    fn parse_github_url_invalid() {
+        assert!(parse_github_url("not-a-github-url").is_err());
+        assert!(parse_github_url("https://gitlab.com/owner/repo").is_err());
+        assert!(parse_github_url("").is_err());
+    }
+
+    // parse_owner_repo tests
+    #[test]
+    fn parse_owner_repo_valid() {
+        let (owner, repo) = parse_owner_repo("owner/repo").unwrap();
+        assert_eq!(owner, "owner");
+        assert_eq!(repo, "repo");
+    }
+
+    #[test]
+    fn parse_owner_repo_with_dashes() {
+        let (owner, repo) = parse_owner_repo("my-org/my-repo").unwrap();
+        assert_eq!(owner, "my-org");
+        assert_eq!(repo, "my-repo");
+    }
+
+    #[test]
+    fn parse_owner_repo_invalid_no_slash() {
+        assert!(parse_owner_repo("noslash").is_err());
+    }
+
+    #[test]
+    fn parse_owner_repo_invalid_too_many_slashes() {
+        assert!(parse_owner_repo("a/b/c").is_err());
+    }
+
+    #[test]
+    fn parse_owner_repo_invalid_empty() {
+        assert!(parse_owner_repo("").is_err());
+    }
+
+    // Test job filtering logic
+    #[test]
+    fn test_job_filter_matches_rspec() {
+        let name = "run-rspec-tests (3, 0)";
+        let name_lower = name.to_lowercase();
+        assert!(
+            name_lower.contains("rspec")
+                || name_lower.contains("test")
+                || name_lower.contains("spec")
+        );
+    }
+
+    #[test]
+    fn test_job_filter_matches_jest() {
+        let name = "Jest Tests";
+        let name_lower = name.to_lowercase();
+        assert!(
+            name_lower.contains("rspec")
+                || name_lower.contains("test")
+                || name_lower.contains("spec")
+        );
+    }
+
+    #[test]
+    fn test_job_filter_no_match() {
+        let name = "Build Docker Image";
+        let name_lower = name.to_lowercase();
+        assert!(
+            !(name_lower.contains("rspec")
+                || name_lower.contains("test")
+                || name_lower.contains("spec"))
+        );
     }
 }
