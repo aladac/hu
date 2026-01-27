@@ -660,6 +660,34 @@ cargo insta review  # review snapshot changes
 
 ## 7. Dependencies
 
+### Prefer Established Crates
+
+**Don't reinvent the wheel.** Use mature, maintained, popular crates over custom implementations.
+
+| Need | Use crate | Don't implement |
+|------|-----------|-----------------|
+| HTTP client | `reqwest` | Custom HTTP handling |
+| JSON parsing | `serde_json` | Manual parsing |
+| CLI parsing | `clap` | Custom arg parsing |
+| Date/time | `chrono` | Manual date math |
+| Regex | `regex` | Custom pattern matching |
+| UUID | `uuid` | Custom ID generation |
+| Base64 | `base64` | Manual encoding |
+| URL parsing | `url` | String manipulation |
+| Retries | `backoff`, `tokio-retry` | Custom retry loops |
+| Rate limiting | `governor` | Manual throttling |
+
+**Selection criteria:**
+- Downloads: >100k/month on crates.io
+- Maintenance: Updated within last 6 months
+- Ecosystem: Used by other popular crates
+- Documentation: Has examples and API docs
+
+**When to implement custom:**
+- Trivial one-liner (don't add dep for 3 lines of code)
+- Domain-specific logic unique to your app
+- When existing crates don't fit and wrapping is harder than implementing
+
 ### Core Crates
 - **clap** (derive) - CLI parsing
 - **colored** - Terminal colors
