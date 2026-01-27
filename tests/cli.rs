@@ -71,6 +71,7 @@ fn all_main_commands_in_help() {
         "sentry",
         "newrelic",
         "eks",
+        "utils",
     ];
     for cmd in commands {
         assert!(stdout.contains(cmd), "help missing command: {}", cmd);
@@ -247,4 +248,68 @@ fn gh_login_requires_token() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--token") || stderr.contains("required"));
+}
+
+// Utils subcommand tests
+
+#[test]
+fn utils_shows_help() {
+    let output = hu().arg("utils").output().expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("fetch-html"));
+    assert!(stdout.contains("grep"));
+}
+
+#[test]
+fn utils_fetch_html_help() {
+    let output = hu()
+        .args(["utils", "fetch-html", "--help"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--content"));
+    assert!(stdout.contains("--summary"));
+    assert!(stdout.contains("--links"));
+    assert!(stdout.contains("--headings"));
+    assert!(stdout.contains("--selector"));
+}
+
+#[test]
+fn utils_grep_help() {
+    let output = hu()
+        .args(["utils", "grep", "--help"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--refs"));
+    assert!(stdout.contains("--unique"));
+    assert!(stdout.contains("--ranked"));
+    assert!(stdout.contains("--limit"));
+    assert!(stdout.contains("--signature"));
+}
+
+#[test]
+fn utils_grep_executes() {
+    let output = hu()
+        .args(["utils", "grep", "fn main", "src/main.rs"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("main.rs"));
+}
+
+#[test]
+fn utils_grep_refs_mode() {
+    let output = hu()
+        .args(["utils", "grep", "fn", "src/main.rs", "--refs"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Refs mode: just file:line, no content
+    assert!(stdout.contains("main.rs:"));
 }

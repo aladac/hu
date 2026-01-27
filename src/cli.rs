@@ -8,6 +8,7 @@ use crate::newrelic::NewRelicCommand;
 use crate::pagerduty::PagerDutyCommand;
 use crate::sentry::SentryCommand;
 use crate::slack::SlackCommand;
+use crate::utils::UtilsCommand;
 
 #[derive(Parser)]
 #[command(name = "hu")]
@@ -68,5 +69,11 @@ pub enum Command {
     Eks {
         #[command(subcommand)]
         cmd: Option<EksCommand>,
+    },
+
+    /// Utility commands (fetch-html, grep)
+    Utils {
+        #[command(subcommand)]
+        cmd: Option<UtilsCommand>,
     },
 }

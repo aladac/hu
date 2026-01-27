@@ -10,6 +10,7 @@ mod pagerduty;
 mod sentry;
 mod slack;
 mod util;
+mod utils;
 
 use cli::{Cli, Command};
 
@@ -73,6 +74,12 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
         }
         Command::Eks { cmd: None } => {
             print_subcommand_help("eks")?;
+        }
+        Command::Utils { cmd: Some(cmd) } => {
+            return utils::run_command(cmd).await;
+        }
+        Command::Utils { cmd: None } => {
+            print_subcommand_help("utils")?;
         }
     }
     Ok(())
