@@ -727,6 +727,7 @@ cargo insta review  # review snapshot changes
 - **clap** (derive) - CLI parsing
 - **ratatui** - Terminal UI (tables, progress, colors, layouts)
 - **crossterm** - Terminal backend for ratatui
+- **tui-markdown** - Markdown rendering for ratatui
 - **anyhow** - Application errors
 - **thiserror** - Library errors
 - **serde** + **serde_json** - Serialization
@@ -1048,6 +1049,38 @@ pub fn status_icon(status: &str) -> &'static str {
     }
 }
 ```
+
+**Markdown rendering:**
+```rust
+use tui_markdown::from_str;
+use ratatui::widgets::Paragraph;
+
+// Render Jira description, PR body, etc.
+let markdown = r#"
+## Summary
+Fix the login redirect issue.
+
+### Changes
+- Updated auth middleware
+- Added session validation
+
+### Testing
+- [x] Unit tests pass
+- [ ] Integration tests pending
+"#;
+
+let text = from_str(markdown);
+let widget = Paragraph::new(text)
+    .block(Block::default().borders(Borders::ALL).title("Description"));
+
+frame.render_widget(widget, area);
+```
+
+Useful for:
+- Jira ticket descriptions
+- PR/issue bodies from GitHub
+- Slack messages with formatting
+- Help text and documentation
 
 **Simple output (non-interactive):**
 ```rust
