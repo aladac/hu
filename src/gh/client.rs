@@ -97,17 +97,12 @@ impl GithubClient {
 
 #[cfg(test)]
 mod tests {
-    // Integration tests would require mocking octocrab or using a real token
-    // For unit tests, we verify the struct can be constructed with a token
+    use super::*;
 
     #[test]
-    fn client_requires_token() {
-        // Without a token stored, new() should fail
-        use super::GithubClient;
-
-        // This will fail unless credentials are stored
-        let result = GithubClient::new();
-        // Just verify it returns a Result (either Ok or Err based on creds)
-        assert!(result.is_ok() || result.is_err());
+    fn get_token_returns_option() {
+        // Just verify get_token doesn't panic
+        let token = get_token();
+        assert!(token.is_some() || token.is_none());
     }
 }

@@ -15,7 +15,7 @@ pub struct GithubCredentials {
     pub username: String,
 }
 
-/// Returns the config directory path (~/.config/hu/)
+/// Returns the config directory path
 pub fn config_dir() -> Result<PathBuf> {
     let proj_dirs = directories::ProjectDirs::from("", "", "hu")
         .context("Could not determine config directory")?;
@@ -27,7 +27,7 @@ fn credentials_path() -> Result<PathBuf> {
     Ok(config_dir()?.join("credentials.toml"))
 }
 
-/// Load credentials from ~/.config/hu/credentials.toml
+/// Load credentials from config dir
 pub fn load_credentials() -> Result<Credentials> {
     let path = credentials_path()?;
     if !path.exists() {
@@ -40,7 +40,7 @@ pub fn load_credentials() -> Result<Credentials> {
     toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
-/// Save credentials to ~/.config/hu/credentials.toml
+/// Save credentials to config dir
 pub fn save_credentials(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
     let dir = path.parent().unwrap();
