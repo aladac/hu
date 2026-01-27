@@ -1,8 +1,54 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use octocrab::Octocrab;
 
 use super::auth::get_token;
 use super::types::{CiStatus, PullRequest, TestFailure};
+
+/// Trait for GitHub API operations (enables mocking in tests)
+pub trait GithubApi: Send + Sync {
+    /// List open PRs authored by the current user
+    fn list_user_prs(&self) -> impl std::future::Future<Output = Result<Vec<PullRequest>>> + Send;
+
+    /// Get CI status for a PR
+    fn get_ci_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+    ) -> impl std::future::Future<Output = Result<CiStatus>> + Send;
+
+    /// Get the branch name for a PR
+    fn get_pr_branch(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+    ) -> impl std::future::Future<Output = Result<String>> + Send;
+
+    /// Get the latest failed workflow run for a branch
+    fn get_latest_failed_run_for_branch(
+        &self,
+        owner: &str,
+        repo: &str,
+        branch: &str,
+    ) -> impl std::future::Future<Output = Result<Option<u64>>> + Send;
+
+    /// Get failed jobs for a workflow run
+    fn get_failed_jobs(
+        &self,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
+    ) -> impl std::future::Future<Output = Result<Vec<(u64, String)>>> + Send;
+
+    /// Download logs for a job
+    fn get_job_logs(
+        &self,
+        owner: &str,
+        repo: &str,
+        job_id: u64,
+    ) -> impl std::future::Future<Output = Result<String>> + Send;
+}
 
 /// Parse CI status from GitHub API responses (pure function, testable)
 pub fn parse_ci_status(state: &str, check_runs: Option<&Vec<serde_json::Value>>) -> CiStatus {
@@ -95,9 +141,10 @@ impl GithubClient {
 
         Ok(Self { client })
     }
+}
 
-    /// List open PRs authored by the current user
-    pub async fn list_user_prs(&self) -> Result<Vec<PullRequest>> {
+impl GithubApi for GithubClient {
+    async fn list_user_prs(&self) -> Result<Vec<PullRequest>> {
         // Use the search API to find PRs where author is current user
         let result = self
             .client
@@ -142,8 +189,7 @@ impl GithubClient {
         Ok(prs)
     }
 
-    /// Get CI status for a PR
-    pub async fn get_ci_status(&self, owner: &str, repo: &str, pr_number: u64) -> Result<CiStatus> {
+    async fn get_ci_status(&self, owner: &str, repo: &str, pr_number: u64) -> Result<CiStatus> {
         // Get the PR to find the head SHA
         let pr = self
             .client
@@ -181,38 +227,7 @@ impl GithubClient {
         Ok(parse_ci_status(state, check_runs))
     }
 
-    /// Verify the client is authenticated by checking the current user
-    #[allow(dead_code)]
-    pub async fn verify_auth(&self) -> Result<String> {
-        let user = self
-            .client
-            .current()
-            .user()
-            .await
-            .context("Failed to verify authentication")?;
-
-        if user.login.is_empty() {
-            bail!("Authentication verification failed");
-        }
-
-        Ok(user.login)
-    }
-
-    /// Get the head SHA for a PR
-    #[allow(dead_code)]
-    pub async fn get_pr_head_sha(&self, owner: &str, repo: &str, pr_number: u64) -> Result<String> {
-        let pr = self
-            .client
-            .pulls(owner, repo)
-            .get(pr_number)
-            .await
-            .context("Failed to get PR")?;
-
-        Ok(pr.head.sha)
-    }
-
-    /// Get the branch name for a PR
-    pub async fn get_pr_branch(&self, owner: &str, repo: &str, pr_number: u64) -> Result<String> {
+    async fn get_pr_branch(&self, owner: &str, repo: &str, pr_number: u64) -> Result<String> {
         let pr = self
             .client
             .pulls(owner, repo)
@@ -223,8 +238,7 @@ impl GithubClient {
         Ok(pr.head.ref_field)
     }
 
-    /// Get the latest failed workflow run for a branch
-    pub async fn get_latest_failed_run_for_branch(
+    async fn get_latest_failed_run_for_branch(
         &self,
         owner: &str,
         repo: &str,
@@ -245,8 +259,7 @@ impl GithubClient {
         Ok(extract_run_id(&runs))
     }
 
-    /// Get failed jobs for a workflow run
-    pub async fn get_failed_jobs(
+    async fn get_failed_jobs(
         &self,
         owner: &str,
         repo: &str,
@@ -264,8 +277,7 @@ impl GithubClient {
         Ok(extract_failed_jobs(&jobs))
     }
 
-    /// Download logs for a job
-    pub async fn get_job_logs(&self, owner: &str, repo: &str, job_id: u64) -> Result<String> {
+    async fn get_job_logs(&self, owner: &str, repo: &str, job_id: u64) -> Result<String> {
         // The logs endpoint returns a redirect to a download URL
         // We need to use reqwest directly for this
         let token = get_token().context("Not authenticated")?;
@@ -289,89 +301,89 @@ impl GithubClient {
 
         Ok(logs)
     }
+}
 
-    /// Extract test failures from logs (RSpec format)
-    pub fn parse_test_failures(logs: &str) -> Vec<TestFailure> {
-        let mut failures = Vec::new();
+/// Extract test failures from logs (RSpec format)
+pub fn parse_test_failures(logs: &str) -> Vec<TestFailure> {
+    let mut failures = Vec::new();
 
-        // Collect failure error messages in order
-        let mut error_messages: Vec<String> = Vec::new();
+    // Collect failure error messages in order
+    let mut error_messages: Vec<String> = Vec::new();
 
-        // Find the Failures section and parse each failure block
-        if let Some(failures_start) = logs.find("Failures:") {
-            let failures_end = logs.find("Failed examples:").unwrap_or(logs.len());
-            let failures_section = &logs[failures_start..failures_end];
+    // Find the Failures section and parse each failure block
+    if let Some(failures_start) = logs.find("Failures:") {
+        let failures_end = logs.find("Failed examples:").unwrap_or(logs.len());
+        let failures_section = &logs[failures_start..failures_end];
 
-            // Split by numbered failure pattern "N) description"
-            let block_starts: Vec<usize> = regex::Regex::new(r"\d+\)\s+\S")
-                .ok()
-                .map(|re| re.find_iter(failures_section).map(|m| m.start()).collect())
-                .unwrap_or_default();
+        // Split by numbered failure pattern "N) description"
+        let block_starts: Vec<usize> = regex::Regex::new(r"\d+\)\s+\S")
+            .ok()
+            .map(|re| re.find_iter(failures_section).map(|m| m.start()).collect())
+            .unwrap_or_default();
 
-            let mut positions = block_starts.clone();
-            positions.push(failures_section.len());
+        let mut positions = block_starts.clone();
+        positions.push(failures_section.len());
 
-            for i in 0..block_starts.len() {
-                let block = &failures_section[positions[i]..positions[i + 1]];
+        for i in 0..block_starts.len() {
+            let block = &failures_section[positions[i]..positions[i + 1]];
 
-                // Extract error: code line after Failure/Error: and the error message on next line
-                if let Some(fe_idx) = block.find("Failure/Error:") {
-                    let after_fe = &block[fe_idx..];
-                    let lines: Vec<String> = after_fe
-                        .lines()
-                        .map(clean_ci_line)
-                        .filter(|l| !l.is_empty())
-                        .take(4)
-                        .collect();
+            // Extract error: code line after Failure/Error: and the error message on next line
+            if let Some(fe_idx) = block.find("Failure/Error:") {
+                let after_fe = &block[fe_idx..];
+                let lines: Vec<String> = after_fe
+                    .lines()
+                    .map(clean_ci_line)
+                    .filter(|l| !l.is_empty())
+                    .take(4)
+                    .collect();
 
-                    // lines[0] = "Failure/Error: <code>"
-                    // lines[1] = "<error message>" or "# <stack trace>"
-                    let code_line = lines
-                        .first()
-                        .map(|l| l.strip_prefix("Failure/Error:").unwrap_or(l).trim())
-                        .unwrap_or("");
-                    let error_msg = lines.get(1).map(|s| s.as_str()).unwrap_or("");
+                // lines[0] = "Failure/Error: <code>"
+                // lines[1] = "<error message>" or "# <stack trace>"
+                let code_line = lines
+                    .first()
+                    .map(|l| l.strip_prefix("Failure/Error:").unwrap_or(l).trim())
+                    .unwrap_or("");
+                let error_msg = lines.get(1).map(|s| s.as_str()).unwrap_or("");
 
-                    let error_text = if error_msg.is_empty() || error_msg.starts_with("# ") {
-                        code_line.to_string()
-                    } else {
-                        format!("{}\n{}", code_line, error_msg)
-                    };
+                let error_text = if error_msg.is_empty() || error_msg.starts_with("# ") {
+                    code_line.to_string()
+                } else {
+                    format!("{}\n{}", code_line, error_msg)
+                };
 
-                    error_messages.push(error_text);
-                }
+                error_messages.push(error_text);
             }
         }
-
-        // Extract failed examples from the "Failed examples:" section
-        // Format: rspec ./spec/helpers/prices_api_helper_spec.rb:289 # description
-        let failed_examples_re = regex::Regex::new(r"rspec\s+(\./spec/[^\s]+:\d+)").ok();
-
-        if let Some(re) = &failed_examples_re {
-            for (i, cap) in re.captures_iter(logs).enumerate() {
-                let spec_file = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-
-                // Get error message by index (failures appear in same order)
-                let failure_text = error_messages
-                    .get(i)
-                    .cloned()
-                    .unwrap_or_else(|| "Test failed".to_string());
-
-                // Avoid duplicates
-                if !failures
-                    .iter()
-                    .any(|f: &TestFailure| f.spec_file == spec_file)
-                {
-                    failures.push(TestFailure {
-                        spec_file: spec_file.to_string(),
-                        failure_text,
-                    });
-                }
-            }
-        }
-
-        failures
     }
+
+    // Extract failed examples from the "Failed examples:" section
+    // Format: rspec ./spec/helpers/prices_api_helper_spec.rb:289 # description
+    let failed_examples_re = regex::Regex::new(r"rspec\s+(\./spec/[^\s]+:\d+)").ok();
+
+    if let Some(re) = &failed_examples_re {
+        for (i, cap) in re.captures_iter(logs).enumerate() {
+            let spec_file = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+
+            // Get error message by index (failures appear in same order)
+            let failure_text = error_messages
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| "Test failed".to_string());
+
+            // Avoid duplicates
+            if !failures
+                .iter()
+                .any(|f: &TestFailure| f.spec_file == spec_file)
+            {
+                failures.push(TestFailure {
+                    spec_file: spec_file.to_string(),
+                    failure_text,
+                });
+            }
+        }
+    }
+
+    failures
 }
 
 /// Clean up CI log line by removing timestamp prefix
@@ -539,7 +551,7 @@ mod tests {
 2026-01-27T18:51:46.1253383Z Failed examples:
 2026-01-27T18:51:46.1255271Z rspec ./spec/my_class_spec.rb:8 # MyClass does something
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].spec_file, "./spec/my_class_spec.rb:8");
         assert!(failures[0]
@@ -568,7 +580,7 @@ Failed examples:
 rspec ./spec/first_spec.rb:3 # First test fails
 rspec ./spec/second_spec.rb:8 # Second test fails
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 2);
         assert_eq!(failures[0].spec_file, "./spec/first_spec.rb:3");
         assert_eq!(failures[1].spec_file, "./spec/second_spec.rb:8");
@@ -579,13 +591,13 @@ rspec ./spec/second_spec.rb:8 # Second test fails
     #[test]
     fn parse_test_failures_handles_no_failures() {
         let logs = "All tests passed!\n0 failures";
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert!(failures.is_empty());
     }
 
     #[test]
     fn parse_test_failures_handles_empty_logs() {
-        let failures = GithubClient::parse_test_failures("");
+        let failures = parse_test_failures("");
         assert!(failures.is_empty());
     }
 
@@ -603,7 +615,7 @@ Failed examples:
 rspec ./spec/test_spec.rb:3 # Test fails
 rspec ./spec/test_spec.rb:3 # Test fails duplicate
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 1);
     }
 
@@ -619,7 +631,7 @@ rspec ./spec/test_spec.rb:3 # Test fails duplicate
 2026-01-27T18:51:46.1253383Z Failed examples:
 2026-01-27T18:51:46.1255271Z rspec ./spec/helpers/prices_api_helper_spec.rb:289 # PricesApiHelper pax value includes pax
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 1);
         assert_eq!(
             failures[0].spec_file,
@@ -643,7 +655,7 @@ Failed examples:
 
 rspec ./spec/test_spec.rb:3 # Test with stack trace only
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 1);
         // Should only have the code line since next line starts with #
         assert_eq!(failures[0].failure_text, "some_method_call");
@@ -660,7 +672,7 @@ Failures:
        expected: 2
      # ./spec/test_spec.rb:5
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         // No failed examples section means we can't extract spec files
         assert!(failures.is_empty());
     }
@@ -678,7 +690,7 @@ Failed examples:
 
 rspec ./spec/features/admin/users/permissions_spec.rb:42 # Deep path test
 "#;
-        let failures = GithubClient::parse_test_failures(logs);
+        let failures = parse_test_failures(logs);
         assert_eq!(failures.len(), 1);
         assert_eq!(
             failures[0].spec_file,

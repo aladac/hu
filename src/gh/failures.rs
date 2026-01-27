@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use super::cli::FailuresArgs;
-use super::client::GithubClient;
+use super::client::{parse_test_failures, GithubApi, GithubClient};
 
 /// Handle the `hu gh failures` command
 pub async fn run(args: FailuresArgs) -> Result<()> {
@@ -21,17 +21,27 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
         get_current_branch_pr(&owner, &repo).await?
     };
 
+    process_failures(&client, &owner, &repo, pr_number).await
+}
+
+/// Process failures using the given API client (testable)
+pub async fn process_failures(
+    client: &impl GithubApi,
+    owner: &str,
+    repo: &str,
+    pr_number: u64,
+) -> Result<()> {
     eprintln!(
         "Fetching failures for PR #{} in {}/{}...",
         pr_number, owner, repo
     );
 
     // Get the PR's branch name
-    let branch = client.get_pr_branch(&owner, &repo, pr_number).await?;
+    let branch = client.get_pr_branch(owner, repo, pr_number).await?;
 
     // Get the latest failed workflow run for this branch
     let run_id = client
-        .get_latest_failed_run_for_branch(&owner, &repo, &branch)
+        .get_latest_failed_run_for_branch(owner, repo, &branch)
         .await?;
 
     let run_id = match run_id {
@@ -43,7 +53,7 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
     };
 
     // Get failed jobs in that run
-    let failed_jobs = client.get_failed_jobs(&owner, &repo, run_id).await?;
+    let failed_jobs = client.get_failed_jobs(owner, repo, run_id).await?;
 
     if failed_jobs.is_empty() {
         println!("No failed jobs found in run {}.", run_id);
@@ -53,12 +63,7 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
     // Only process test-related jobs (rspec, jest, etc.)
     let test_jobs: Vec<_> = failed_jobs
         .into_iter()
-        .filter(|(_, name)| {
-            let name_lower = name.to_lowercase();
-            name_lower.contains("rspec")
-                || name_lower.contains("test")
-                || name_lower.contains("spec")
-        })
+        .filter(|(_, name)| is_test_job(name))
         .collect();
 
     if test_jobs.is_empty() {
@@ -71,9 +76,9 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
     for (job_id, job_name) in test_jobs {
         eprintln!("Fetching logs for job: {}", job_name);
 
-        match client.get_job_logs(&owner, &repo, job_id).await {
+        match client.get_job_logs(owner, repo, job_id).await {
             Ok(logs) => {
-                let failures = GithubClient::parse_test_failures(&logs);
+                let failures = parse_test_failures(&logs);
                 all_failures.extend(failures);
             }
             Err(e) => {
@@ -107,6 +112,12 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
     Ok(())
 }
 
+/// Check if a job name is test-related
+fn is_test_job(name: &str) -> bool {
+    let name_lower = name.to_lowercase();
+    name_lower.contains("rspec") || name_lower.contains("test") || name_lower.contains("spec")
+}
+
 /// Parse owner/repo from command line argument
 fn parse_owner_repo(repo: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = repo.split('/').collect();
@@ -118,13 +129,18 @@ fn parse_owner_repo(repo: &str) -> Result<(String, String)> {
 
 /// Get owner/repo from git remote
 fn get_current_repo() -> Result<(String, String)> {
-    let output = std::process::Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .context("Failed to get git remote")?;
+    let output = run_git_command(&["remote", "get-url", "origin"])?;
+    parse_github_url(output.trim())
+}
 
-    let url = String::from_utf8_lossy(&output.stdout);
-    parse_github_url(url.trim())
+/// Run a git command and return stdout (extracted for testability)
+fn run_git_command(args: &[&str]) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .output()
+        .context("Failed to run git command")?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// Parse GitHub URL to extract owner/repo
@@ -162,12 +178,8 @@ fn parse_github_url(url: &str) -> Result<(String, String)> {
 /// Get PR number for current branch
 async fn get_current_branch_pr(owner: &str, repo: &str) -> Result<u64> {
     // Get current branch name
-    let output = std::process::Command::new("git")
-        .args(["branch", "--show-current"])
-        .output()
-        .context("Failed to get current branch")?;
-
-    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let branch = run_git_command(&["branch", "--show-current"])?;
+    let branch = branch.trim();
 
     if branch.is_empty() {
         anyhow::bail!("Not on a branch. Use --pr to specify a PR number.");
@@ -181,7 +193,7 @@ async fn get_current_branch_pr(owner: &str, repo: &str) -> Result<u64> {
             "--repo",
             &format!("{}/{}", owner, repo),
             "--head",
-            &branch,
+            branch,
             "--json",
             "number",
             "--limit",
@@ -190,8 +202,13 @@ async fn get_current_branch_pr(owner: &str, repo: &str) -> Result<u64> {
         .output()
         .context("Failed to find PR for current branch")?;
 
+    parse_pr_number_from_json(&output.stdout)
+}
+
+/// Parse PR number from gh pr list JSON output (testable)
+fn parse_pr_number_from_json(json_bytes: &[u8]) -> Result<u64> {
     let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).context("Failed to parse gh pr list output")?;
+        serde_json::from_slice(json_bytes).context("Failed to parse gh pr list output")?;
 
     json.as_array()
         .and_then(|arr| arr.first())
@@ -308,5 +325,198 @@ mod tests {
                 || name_lower.contains("test")
                 || name_lower.contains("spec"))
         );
+    }
+
+    // is_test_job tests
+    #[test]
+    fn is_test_job_rspec() {
+        assert!(is_test_job("run-rspec-tests"));
+        assert!(is_test_job("RSpec"));
+    }
+
+    #[test]
+    fn is_test_job_test() {
+        assert!(is_test_job("unit-tests"));
+        assert!(is_test_job("Test Suite"));
+    }
+
+    #[test]
+    fn is_test_job_spec() {
+        assert!(is_test_job("run-specs"));
+        assert!(is_test_job("Spec Runner"));
+    }
+
+    #[test]
+    fn is_test_job_non_test() {
+        assert!(!is_test_job("build"));
+        assert!(!is_test_job("deploy"));
+        assert!(!is_test_job("lint"));
+    }
+
+    // Mock implementation for testing
+    use crate::gh::types::PullRequest;
+
+    struct MockGithubApi {
+        branch: String,
+        run_id: Option<u64>,
+        failed_jobs: Vec<(u64, String)>,
+        logs: String,
+    }
+
+    impl GithubApi for MockGithubApi {
+        async fn list_user_prs(&self) -> Result<Vec<PullRequest>> {
+            Ok(vec![])
+        }
+
+        async fn get_ci_status(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _pr: u64,
+        ) -> Result<crate::gh::types::CiStatus> {
+            Ok(crate::gh::types::CiStatus::Unknown)
+        }
+
+        async fn get_pr_branch(&self, _owner: &str, _repo: &str, _pr: u64) -> Result<String> {
+            Ok(self.branch.clone())
+        }
+
+        async fn get_latest_failed_run_for_branch(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _branch: &str,
+        ) -> Result<Option<u64>> {
+            Ok(self.run_id)
+        }
+
+        async fn get_failed_jobs(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _run_id: u64,
+        ) -> Result<Vec<(u64, String)>> {
+            Ok(self.failed_jobs.clone())
+        }
+
+        async fn get_job_logs(&self, _owner: &str, _repo: &str, _job_id: u64) -> Result<String> {
+            Ok(self.logs.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn process_failures_no_failed_runs() {
+        let mock = MockGithubApi {
+            branch: "main".to_string(),
+            run_id: None,
+            failed_jobs: vec![],
+            logs: String::new(),
+        };
+        let result = process_failures(&mock, "owner", "repo", 123).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn process_failures_no_failed_jobs() {
+        let mock = MockGithubApi {
+            branch: "main".to_string(),
+            run_id: Some(1),
+            failed_jobs: vec![],
+            logs: String::new(),
+        };
+        let result = process_failures(&mock, "owner", "repo", 123).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn process_failures_no_test_jobs() {
+        let mock = MockGithubApi {
+            branch: "main".to_string(),
+            run_id: Some(1),
+            failed_jobs: vec![(1, "build".to_string()), (2, "deploy".to_string())],
+            logs: String::new(),
+        };
+        let result = process_failures(&mock, "owner", "repo", 123).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn process_failures_with_test_failures() {
+        let mock = MockGithubApi {
+            branch: "main".to_string(),
+            run_id: Some(1),
+            failed_jobs: vec![(1, "rspec-tests".to_string())],
+            logs: r#"
+Failures:
+
+  1) Test fails
+     Failure/Error: expect(1).to eq(2)
+       expected: 2
+
+Failed examples:
+
+rspec ./spec/test_spec.rb:10 # Test fails
+"#
+            .to_string(),
+        };
+        let result = process_failures(&mock, "owner", "repo", 123).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn process_failures_empty_logs() {
+        let mock = MockGithubApi {
+            branch: "main".to_string(),
+            run_id: Some(1),
+            failed_jobs: vec![(1, "test-suite".to_string())],
+            logs: String::new(),
+        };
+        let result = process_failures(&mock, "owner", "repo", 123).await;
+        assert!(result.is_ok());
+    }
+
+    // parse_pr_number_from_json tests
+    #[test]
+    fn parse_pr_number_valid() {
+        let json = br#"[{"number": 123}]"#;
+        let result = parse_pr_number_from_json(json);
+        assert_eq!(result.unwrap(), 123);
+    }
+
+    #[test]
+    fn parse_pr_number_multiple_prs() {
+        let json = br#"[{"number": 100}, {"number": 200}]"#;
+        let result = parse_pr_number_from_json(json);
+        assert_eq!(result.unwrap(), 100); // First one
+    }
+
+    #[test]
+    fn parse_pr_number_empty_array() {
+        let json = br#"[]"#;
+        let result = parse_pr_number_from_json(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_pr_number_invalid_json() {
+        let json = b"not json";
+        let result = parse_pr_number_from_json(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_pr_number_missing_number_field() {
+        let json = br#"[{"title": "some pr"}]"#;
+        let result = parse_pr_number_from_json(json);
+        assert!(result.is_err());
+    }
+
+    // run_git_command test (integration - requires git)
+    #[test]
+    fn run_git_command_version() {
+        // This should work in any environment with git
+        let result = run_git_command(&["--version"]);
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("git version"));
     }
 }

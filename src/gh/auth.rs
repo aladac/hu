@@ -2,22 +2,50 @@ use anyhow::{Context, Result};
 
 use crate::util::{load_credentials, save_credentials, GithubCredentials};
 
+#[cfg(test)]
+use crate::util::{load_credentials_from, save_credentials_to};
+
+#[cfg(test)]
+use std::path::PathBuf;
+
 /// Save token and fetch username
 pub async fn login(token: &str) -> Result<String> {
-    let username = get_username(token).await?;
-
-    let mut creds = load_credentials().unwrap_or_default();
-    creds.github = Some(GithubCredentials {
-        token: token.to_string(),
-        username: username.clone(),
-    });
-    save_credentials(&creds)?;
-
+    let username = fetch_username_from_github(token).await?;
+    save_login(&username, token)?;
     Ok(username)
 }
 
-/// Get the username for the authenticated user
-async fn get_username(token: &str) -> Result<String> {
+/// Save login credentials (extracted for testability)
+pub fn save_login(username: &str, token: &str) -> Result<()> {
+    let mut creds = load_credentials().unwrap_or_default();
+    creds.github = Some(GithubCredentials {
+        token: token.to_string(),
+        username: username.to_string(),
+    });
+    save_credentials(&creds)
+}
+
+/// Save login to a specific path (for testing)
+#[cfg(test)]
+fn save_login_to(username: &str, token: &str, path: &PathBuf) -> Result<()> {
+    let mut creds = load_credentials_from(path).unwrap_or_default();
+    creds.github = Some(GithubCredentials {
+        token: token.to_string(),
+        username: username.to_string(),
+    });
+    save_credentials_to(&creds, path)
+}
+
+/// Load login from a specific path (for testing)
+#[cfg(test)]
+fn load_login_from(path: &PathBuf) -> Option<(String, String)> {
+    load_credentials_from(path)
+        .ok()
+        .and_then(|c| c.github.map(|g| (g.username, g.token)))
+}
+
+/// Fetch username from GitHub API (the actual network call)
+async fn fetch_username_from_github(token: &str) -> Result<String> {
     let octocrab = octocrab::OctocrabBuilder::new()
         .personal_token(token.to_string())
         .build()
@@ -74,5 +102,67 @@ mod tests {
         use crate::util::Credentials;
         let creds = Credentials::default();
         assert!(creds.github.is_none());
+    }
+
+    // Tests for path-based login functions
+    #[test]
+    fn save_and_load_login_roundtrip() {
+        let temp_dir = std::env::temp_dir().join("hu_test_auth");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        // Save login
+        save_login_to("testuser", "test_token", &path).unwrap();
+
+        // Load login
+        let result = load_login_from(&path);
+        assert!(result.is_some());
+        let (username, token) = result.unwrap();
+        assert_eq!(username, "testuser");
+        assert_eq!(token, "test_token");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn load_login_from_missing_file() {
+        let path = PathBuf::from("/nonexistent/credentials.toml");
+        let result = load_login_from(&path);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn load_login_from_empty_credentials() {
+        let temp_dir = std::env::temp_dir().join("hu_test_auth_empty");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        // Write empty credentials
+        std::fs::write(&path, "").unwrap();
+
+        let result = load_login_from(&path);
+        assert!(result.is_none());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn save_login_overwrites_existing() {
+        let temp_dir = std::env::temp_dir().join("hu_test_auth_overwrite");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        // Save first login
+        save_login_to("user1", "token1", &path).unwrap();
+
+        // Save second login
+        save_login_to("user2", "token2", &path).unwrap();
+
+        // Load and verify
+        let (username, token) = load_login_from(&path).unwrap();
+        assert_eq!(username, "user2");
+        assert_eq!(token, "token2");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

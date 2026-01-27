@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::client::GithubClient;
+use super::client::{GithubApi, GithubClient};
 use super::types::CiStatus;
 
 // ANSI color codes
@@ -13,25 +13,7 @@ const RESET: &str = "\x1b[0m";
 /// Handle the `hu gh prs` command
 pub async fn run() -> Result<()> {
     let client = GithubClient::new()?;
-    let mut prs = client.list_user_prs().await?;
-
-    if prs.is_empty() {
-        println!("No open pull requests found.");
-        return Ok(());
-    }
-
-    // Fetch CI status for each PR
-    for pr in &mut prs {
-        let parts: Vec<&str> = pr.repo_full_name.split('/').collect();
-        if parts.len() == 2 {
-            if let Ok(status) = client.get_ci_status(parts[0], parts[1], pr.number).await {
-                pr.ci_status = Some(status);
-            }
-        }
-    }
-
-    print_prs_table(&prs);
-    Ok(())
+    run_with_client(&client).await
 }
 
 fn get_terminal_width() -> usize {
@@ -98,6 +80,29 @@ fn truncate(s: &str, max_len: usize) -> String {
         let truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
         format!("{}…", truncated)
     }
+}
+
+/// Fetch and display PRs using the given API client
+pub async fn run_with_client(client: &impl GithubApi) -> Result<()> {
+    let mut prs = client.list_user_prs().await?;
+
+    if prs.is_empty() {
+        println!("No open pull requests found.");
+        return Ok(());
+    }
+
+    // Fetch CI status for each PR
+    for pr in &mut prs {
+        let parts: Vec<&str> = pr.repo_full_name.split('/').collect();
+        if parts.len() == 2 {
+            if let Ok(status) = client.get_ci_status(parts[0], parts[1], pr.number).await {
+                pr.ci_status = Some(status);
+            }
+        }
+    }
+
+    print_prs_table(&prs);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -234,5 +239,76 @@ mod tests {
     fn print_prs_table_empty_list() {
         let prs: Vec<PullRequest> = vec![];
         print_prs_table(&prs);
+    }
+
+    // Mock implementation for testing
+    struct MockGithubApi {
+        prs: Vec<PullRequest>,
+        ci_status: CiStatus,
+    }
+
+    impl GithubApi for MockGithubApi {
+        async fn list_user_prs(&self) -> Result<Vec<PullRequest>> {
+            Ok(self.prs.clone())
+        }
+
+        async fn get_ci_status(&self, _owner: &str, _repo: &str, _pr: u64) -> Result<CiStatus> {
+            Ok(self.ci_status)
+        }
+
+        async fn get_pr_branch(&self, _owner: &str, _repo: &str, _pr: u64) -> Result<String> {
+            Ok("main".to_string())
+        }
+
+        async fn get_latest_failed_run_for_branch(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _branch: &str,
+        ) -> Result<Option<u64>> {
+            Ok(None)
+        }
+
+        async fn get_failed_jobs(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _run_id: u64,
+        ) -> Result<Vec<(u64, String)>> {
+            Ok(vec![])
+        }
+
+        async fn get_job_logs(&self, _owner: &str, _repo: &str, _job_id: u64) -> Result<String> {
+            Ok(String::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn run_with_client_empty_prs() {
+        let mock = MockGithubApi {
+            prs: vec![],
+            ci_status: CiStatus::Unknown,
+        };
+        let result = run_with_client(&mock).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn run_with_client_with_prs() {
+        let mock = MockGithubApi {
+            prs: vec![PullRequest {
+                number: 1,
+                title: "Test PR".to_string(),
+                html_url: "https://github.com/o/r/pull/1".to_string(),
+                state: "open".to_string(),
+                repo_full_name: "o/r".to_string(),
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                ci_status: None,
+            }],
+            ci_status: CiStatus::Success,
+        };
+        let result = run_with_client(&mock).await;
+        assert!(result.is_ok());
     }
 }

@@ -30,12 +30,17 @@ fn credentials_path() -> Result<PathBuf> {
 /// Load credentials from config dir
 pub fn load_credentials() -> Result<Credentials> {
     let path = credentials_path()?;
+    load_credentials_from(&path)
+}
+
+/// Load credentials from a specific path (testable)
+pub fn load_credentials_from(path: &PathBuf) -> Result<Credentials> {
     if !path.exists() {
         return Ok(Credentials::default());
     }
 
     let contents =
-        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
 
     toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))
 }
@@ -43,14 +48,19 @@ pub fn load_credentials() -> Result<Credentials> {
 /// Save credentials to config dir
 pub fn save_credentials(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
-    let dir = path.parent().unwrap();
+    save_credentials_to(creds, &path)
+}
 
-    fs::create_dir_all(dir)
-        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+/// Save credentials to a specific path (testable)
+pub fn save_credentials_to(creds: &Credentials, path: &PathBuf) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+    }
 
     let contents = toml::to_string_pretty(creds).context("Failed to serialize credentials")?;
 
-    fs::write(&path, contents).with_context(|| format!("Failed to write {}", path.display()))?;
+    fs::write(path, contents).with_context(|| format!("Failed to write {}", path.display()))?;
 
     Ok(())
 }
@@ -166,5 +176,112 @@ mod tests {
     fn config_dir_is_absolute() {
         let dir = config_dir().unwrap();
         assert!(dir.is_absolute());
+    }
+
+    // File I/O tests with temp files
+    #[test]
+    fn save_and_load_credentials_roundtrip() {
+        let temp_dir = std::env::temp_dir().join("hu_test_config");
+        let _ = std::fs::remove_dir_all(&temp_dir); // Clean up from previous runs
+        let path = temp_dir.join("credentials.toml");
+
+        let creds = Credentials {
+            github: Some(GithubCredentials {
+                token: "test_token_123".to_string(),
+                username: "testuser".to_string(),
+            }),
+        };
+
+        // Save
+        save_credentials_to(&creds, &path).unwrap();
+        assert!(path.exists());
+
+        // Load
+        let loaded = load_credentials_from(&path).unwrap();
+        assert!(loaded.github.is_some());
+        let gh = loaded.github.unwrap();
+        assert_eq!(gh.token, "test_token_123");
+        assert_eq!(gh.username, "testuser");
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn load_credentials_from_missing_file() {
+        let path = PathBuf::from("/nonexistent/path/credentials.toml");
+        let creds = load_credentials_from(&path).unwrap();
+        assert!(creds.github.is_none());
+    }
+
+    #[test]
+    fn load_credentials_from_empty_file() {
+        let temp_dir = std::env::temp_dir().join("hu_test_empty");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        std::fs::write(&path, "").unwrap();
+        let creds = load_credentials_from(&path).unwrap();
+        assert!(creds.github.is_none());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn load_credentials_from_partial_file() {
+        let temp_dir = std::env::temp_dir().join("hu_test_partial");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        std::fs::write(&path, "[github]\ntoken = \"abc\"\nusername = \"user\"").unwrap();
+        let creds = load_credentials_from(&path).unwrap();
+        assert!(creds.github.is_some());
+        assert_eq!(creds.github.unwrap().token, "abc");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn save_credentials_creates_parent_dirs() {
+        let temp_dir = std::env::temp_dir().join("hu_test_nested/a/b/c");
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("hu_test_nested"));
+        let path = temp_dir.join("credentials.toml");
+
+        let creds = Credentials::default();
+        save_credentials_to(&creds, &path).unwrap();
+        assert!(path.exists());
+
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("hu_test_nested"));
+    }
+
+    #[test]
+    fn save_credentials_overwrites_existing() {
+        let temp_dir = std::env::temp_dir().join("hu_test_overwrite");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        // Save first version
+        let creds1 = Credentials {
+            github: Some(GithubCredentials {
+                token: "old".to_string(),
+                username: "old".to_string(),
+            }),
+        };
+        save_credentials_to(&creds1, &path).unwrap();
+
+        // Save second version
+        let creds2 = Credentials {
+            github: Some(GithubCredentials {
+                token: "new".to_string(),
+                username: "new".to_string(),
+            }),
+        };
+        save_credentials_to(&creds2, &path).unwrap();
+
+        // Load and verify
+        let loaded = load_credentials_from(&path).unwrap();
+        assert_eq!(loaded.github.unwrap().token, "new");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
