@@ -730,6 +730,35 @@ cargo insta review  # review snapshot changes
 - **tokio** - Async runtime
 - **tracing** - Structured logging
 
+### Humanization Crates (ActiveSupport-like)
+- **timeago** - "2 hours ago", "in 3 days"
+- **humantime** - Duration ↔ "1h 30m 32s" (parse & format)
+- **Inflector** - pluralize, singularize, case conversion
+- **humansize** - Bytes → "1.43 MiB"
+
+```rust
+use timeago::Formatter;
+use humantime::format_duration;
+use inflector::Inflector;
+use humansize::{format_size, BINARY};
+
+// Time ago
+let formatter = Formatter::new();
+formatter.convert(Duration::from_secs(3600));   // "1 hour ago"
+
+// Duration formatting
+format_duration(Duration::from_secs(5432));     // "1h 30m 32s"
+
+// String inflection
+"user".to_plural();                             // "users"
+"posts".to_singular();                          // "post"
+"user_account".to_class_case();                 // "UserAccount"
+1.ordinalize();                                 // "1st"
+
+// Byte sizes
+format_size(1_500_000u64, BINARY);              // "1.43 MiB"
+```
+
 ### Dev Dependencies
 - **insta** - Snapshot testing
 - **criterion** - Benchmarks
