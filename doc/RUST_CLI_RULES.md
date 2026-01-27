@@ -149,12 +149,64 @@ fn status_icon(status: &str, conclusion: Option<&str>) -> ColoredString
 
 ## 5. Testing
 
-### Test Organization
-- Tests in `tests/` directory, not inline
-- Unit tests: `tests/unit_tests/`
-- Integration tests: `tests/integration_tests/`
-- Use snapshot tests (`insta`) for output formatting
-- Add benchmarks for performance-critical code
+### No Inline Tests
+**Never use `#[cfg(test)]` modules in source files.**
+
+```rust
+// BAD - inline test module
+// src/parser.rs
+pub fn parse(input: &str) -> Result<Data> { ... }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_parse() { ... }
+}
+
+// GOOD - separate test file
+// src/parser.rs
+pub fn parse(input: &str) -> Result<Data> { ... }
+
+// tests/parser_tests.rs
+use hu::parse;
+#[test]
+fn test_parse() { ... }
+```
+
+**Why external tests:**
+- Keeps source files focused on implementation
+- Tests only access public API (better encapsulation)
+- Easier to find and navigate tests
+- Cleaner compilation units
+- Forces better module design
+
+### Test Directory Structure
+```
+tests/
+  unit_tests/
+    mod.rs
+    parser.rs        # Unit tests for src/parser.rs
+    config.rs        # Unit tests for src/config.rs
+  integration_tests/
+    mod.rs
+    cli.rs           # End-to-end CLI tests
+    api.rs           # API integration tests
+  fixtures/
+    sample.json      # Test data files
+  snapshots/         # insta snapshot files (auto-generated)
+```
+
+### Test File Naming
+- `tests/unit_tests/{module}.rs` - mirrors `src/{module}.rs`
+- `tests/integration_tests/{feature}.rs` - tests features end-to-end
+- Entry points: `tests/unit.rs`, `tests/integration.rs`
+
+### Test Types
+- **Unit tests** - Test individual functions, use mocks
+- **Integration tests** - Test CLI commands, real I/O
+- **Snapshot tests** - Use `insta` for output formatting
+- **Benchmarks** - Use `criterion` in `benches/`
 
 ### Before Refactoring
 1. Ensure existing tests pass
@@ -165,6 +217,7 @@ fn status_icon(status: &str, conclusion: Option<&str>) -> ColoredString
 ```bash
 just check      # fmt + clippy
 just test       # run all tests
+cargo insta review  # review snapshot changes
 ```
 
 ---
@@ -277,6 +330,6 @@ impl EksService {
 - [ ] No hardcoded URLs
 - [ ] All errors propagated with context
 - [ ] Common patterns extracted to helpers
-- [ ] Tests in `tests/` directory
+- [ ] Tests in `tests/` directory (no inline `#[cfg(test)]`)
 - [ ] `clippy.toml` and `rustfmt.toml` configured
 - [ ] CI runs fmt, clippy, and tests
