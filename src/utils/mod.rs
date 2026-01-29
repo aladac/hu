@@ -1,6 +1,7 @@
 mod cli;
 mod fetch_html;
 mod grep;
+mod web_search;
 
 pub use cli::UtilsCommand;
 
@@ -11,5 +12,6 @@ pub async fn run_command(cmd: UtilsCommand) -> Result<()> {
     match cmd {
         UtilsCommand::FetchHtml(args) => fetch_html::run(args).await,
         UtilsCommand::Grep(args) => grep::run(args),
+        UtilsCommand::WebSearch(args) => web_search::run(args).await,
     }
 }

@@ -6,6 +6,8 @@ pub enum UtilsCommand {
     FetchHtml(FetchHtmlArgs),
     /// Smart grep with token-saving options
     Grep(GrepArgs),
+    /// Web search using Brave Search API
+    WebSearch(WebSearchArgs),
 }
 
 #[derive(Debug, Args)]
@@ -82,4 +84,22 @@ pub struct GrepArgs {
     /// Include hidden files
     #[arg(long)]
     pub hidden: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct WebSearchArgs {
+    /// Search query
+    pub query: String,
+
+    /// Number of results to fetch content from (default: 3)
+    #[arg(long, short = 'n', default_value = "3")]
+    pub results: usize,
+
+    /// Only show search results (don't fetch content)
+    #[arg(long, short = 'l')]
+    pub list: bool,
+
+    /// Output to file instead of stdout
+    #[arg(long, short = 'o')]
+    pub output: Option<String>,
 }

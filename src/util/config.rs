@@ -9,6 +9,13 @@ pub struct Credentials {
     pub github: Option<GithubCredentials>,
     #[serde(default)]
     pub jira: Option<JiraCredentials>,
+    #[serde(default)]
+    pub brave: Option<BraveCredentials>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BraveCredentials {
+    pub api_key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -101,6 +108,7 @@ mod tests {
                 username: "testuser".to_string(),
             }),
             jira: None,
+            brave: None,
         };
 
         let toml_str = toml::to_string(&creds).unwrap();
@@ -135,6 +143,7 @@ mod tests {
                 username: "octocat".to_string(),
             }),
             jira: None,
+            brave: None,
         };
 
         let toml_str = toml::to_string_pretty(&creds).unwrap();
@@ -206,6 +215,7 @@ mod tests {
                 username: "testuser".to_string(),
             }),
             jira: None,
+            brave: None,
         };
 
         // Save
@@ -283,6 +293,7 @@ mod tests {
                 username: "old".to_string(),
             }),
             jira: None,
+            brave: None,
         };
         save_credentials_to(&creds1, &path).unwrap();
 
@@ -293,6 +304,7 @@ mod tests {
                 username: "new".to_string(),
             }),
             jira: None,
+            brave: None,
         };
         save_credentials_to(&creds2, &path).unwrap();
 
@@ -349,6 +361,7 @@ mod tests {
                 cloud_id: "cloud123".to_string(),
                 site_url: "https://example.atlassian.net".to_string(),
             }),
+            brave: None,
         };
 
         let toml_str = toml::to_string(&creds).unwrap();
@@ -374,6 +387,7 @@ mod tests {
                 cloud_id: "test_cloud".to_string(),
                 site_url: "https://test.atlassian.net".to_string(),
             }),
+            brave: None,
         };
 
         let toml_str = toml::to_string_pretty(&creds).unwrap();
@@ -400,6 +414,7 @@ mod tests {
                 cloud_id: "jira_cloud".to_string(),
                 site_url: "https://jira.atlassian.net".to_string(),
             }),
+            brave: None,
         };
 
         save_credentials_to(&creds, &path).unwrap();
@@ -431,6 +446,7 @@ mod tests {
                 cloud_id: "both_cloud".to_string(),
                 site_url: "https://both.atlassian.net".to_string(),
             }),
+            brave: None,
         };
 
         let toml_str = toml::to_string(&creds).unwrap();
@@ -440,5 +456,110 @@ mod tests {
         assert!(parsed.jira.is_some());
         assert_eq!(parsed.github.unwrap().token, "gh_token");
         assert_eq!(parsed.jira.unwrap().access_token, "jira_access");
+    }
+
+    // BraveCredentials tests
+    #[test]
+    fn brave_credentials_clone() {
+        let creds = BraveCredentials {
+            api_key: "brave_key".to_string(),
+        };
+        let cloned = creds.clone();
+        assert_eq!(cloned.api_key, creds.api_key);
+    }
+
+    #[test]
+    fn brave_credentials_debug_format() {
+        let creds = BraveCredentials {
+            api_key: "key".to_string(),
+        };
+        let debug_str = format!("{:?}", creds);
+        assert!(debug_str.contains("BraveCredentials"));
+    }
+
+    #[test]
+    fn brave_credentials_serialize_deserialize() {
+        let creds = Credentials {
+            github: None,
+            jira: None,
+            brave: Some(BraveCredentials {
+                api_key: "test_api_key".to_string(),
+            }),
+        };
+
+        let toml_str = toml::to_string(&creds).unwrap();
+        let parsed: Credentials = toml::from_str(&toml_str).unwrap();
+
+        assert!(parsed.brave.is_some());
+        let brave = parsed.brave.unwrap();
+        assert_eq!(brave.api_key, "test_api_key");
+    }
+
+    #[test]
+    fn brave_credentials_toml_format() {
+        let creds = Credentials {
+            github: None,
+            jira: None,
+            brave: Some(BraveCredentials {
+                api_key: "brave_api_key_123".to_string(),
+            }),
+        };
+
+        let toml_str = toml::to_string_pretty(&creds).unwrap();
+        assert!(toml_str.contains("[brave]"));
+        assert!(toml_str.contains("api_key = \"brave_api_key_123\""));
+    }
+
+    #[test]
+    fn save_and_load_brave_credentials_roundtrip() {
+        let temp_dir = std::env::temp_dir().join("hu_test_brave_config");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let path = temp_dir.join("credentials.toml");
+
+        let creds = Credentials {
+            github: None,
+            jira: None,
+            brave: Some(BraveCredentials {
+                api_key: "brave_roundtrip_key".to_string(),
+            }),
+        };
+
+        save_credentials_to(&creds, &path).unwrap();
+        assert!(path.exists());
+
+        let loaded = load_credentials_from(&path).unwrap();
+        assert!(loaded.brave.is_some());
+        let brave = loaded.brave.unwrap();
+        assert_eq!(brave.api_key, "brave_roundtrip_key");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn credentials_with_all_three() {
+        let creds = Credentials {
+            github: Some(GithubCredentials {
+                token: "gh".to_string(),
+                username: "user".to_string(),
+            }),
+            jira: Some(JiraCredentials {
+                access_token: "jira".to_string(),
+                refresh_token: "refresh".to_string(),
+                expires_at: 123,
+                cloud_id: "cloud".to_string(),
+                site_url: "https://x.atlassian.net".to_string(),
+            }),
+            brave: Some(BraveCredentials {
+                api_key: "brave".to_string(),
+            }),
+        };
+
+        let toml_str = toml::to_string(&creds).unwrap();
+        let parsed: Credentials = toml::from_str(&toml_str).unwrap();
+
+        assert!(parsed.github.is_some());
+        assert!(parsed.jira.is_some());
+        assert!(parsed.brave.is_some());
+        assert_eq!(parsed.brave.unwrap().api_key, "brave");
     }
 }
