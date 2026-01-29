@@ -1,12 +1,14 @@
 use clap::{CommandFactory, Parser};
 
 mod cli;
+mod context;
 mod dashboard;
 mod eks;
 mod gh;
 mod jira;
 mod newrelic;
 mod pagerduty;
+mod read;
 mod sentry;
 mod slack;
 mod util;
@@ -80,6 +82,15 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
         }
         Command::Utils { cmd: None } => {
             print_subcommand_help("utils")?;
+        }
+        Command::Context { cmd: Some(cmd) } => {
+            return context::run_command(cmd).await;
+        }
+        Command::Context { cmd: None } => {
+            print_subcommand_help("context")?;
+        }
+        Command::Read(args) => {
+            return read::run(args);
         }
     }
     Ok(())

@@ -8,6 +8,12 @@ pub enum UtilsCommand {
     Grep(GrepArgs),
     /// Web search using Brave Search API
     WebSearch(WebSearchArgs),
+    /// Build heading index for markdown files
+    DocsIndex(DocsIndexArgs),
+    /// Search docs index for matching sections
+    DocsSearch(DocsSearchArgs),
+    /// Extract a section from a markdown file
+    DocsSection(DocsSectionArgs),
 }
 
 #[derive(Debug, Args)]
@@ -102,4 +108,37 @@ pub struct WebSearchArgs {
     /// Output to file instead of stdout
     #[arg(long, short = 'o')]
     pub output: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct DocsIndexArgs {
+    /// Directory to index
+    #[arg(default_value = ".")]
+    pub path: String,
+
+    /// Output index to file (JSON)
+    #[arg(long, short = 'o')]
+    pub output: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct DocsSearchArgs {
+    /// Path to index file (JSON)
+    pub index: String,
+
+    /// Search query
+    pub query: String,
+
+    /// Limit number of results
+    #[arg(long, short = 'n')]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Args)]
+pub struct DocsSectionArgs {
+    /// Markdown file path
+    pub file: String,
+
+    /// Section heading to extract
+    pub heading: String,
 }

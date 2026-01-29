@@ -1,11 +1,13 @@
 use clap::{Parser, Subcommand};
 
+use crate::context::ContextCommand;
 use crate::dashboard::DashboardCommand;
 use crate::eks::EksCommand;
 use crate::gh::GhCommand;
 use crate::jira::JiraCommand;
 use crate::newrelic::NewRelicCommand;
 use crate::pagerduty::PagerDutyCommand;
+use crate::read::ReadArgs;
 use crate::sentry::SentryCommand;
 use crate::slack::SlackCommand;
 use crate::utils::UtilsCommand;
@@ -76,4 +78,13 @@ pub enum Command {
         #[command(subcommand)]
         cmd: Option<UtilsCommand>,
     },
+
+    /// Session context tracking (prevent duplicate file reads)
+    Context {
+        #[command(subcommand)]
+        cmd: Option<ContextCommand>,
+    },
+
+    /// Smart file reading (outline, interface, around, diff)
+    Read(ReadArgs),
 }
