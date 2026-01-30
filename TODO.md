@@ -1,17 +1,10 @@
 # TODO: Token-Saving CLI Features
 
-## Phase 1: Session Context Tracking
-- [ ] Step 1.1: Create context module structure
-- [ ] Step 1.2: Implement storage layer
-- [ ] Step 1.3: Implement service logic
-- [ ] Step 1.4: Add CLI handlers and tests
+## Phase 1: Session Context Tracking ✓
+Implemented: `hu context track/check/summary/clear`
 
-## Phase 2: File Intelligence (`hu read`)
-- [ ] Step 2.1: Create read module structure
-- [ ] Step 2.2: Implement outline extraction
-- [ ] Step 2.3: Implement interface extraction
-- [ ] Step 2.4: Implement around and diff
-- [ ] Step 2.5: Add service layer and tests
+## Phase 2: File Intelligence (`hu read`) ✓
+Implemented: `hu read --outline/--interface/--around/--diff`
 
 ## Phase 3: Documentation Section Extraction
 - [ ] Step 3.1: Implement docs indexing
