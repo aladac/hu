@@ -3,13 +3,33 @@
 //! List channels, get channel info, and resolve channel names to IDs.
 
 use anyhow::Result;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 use tokio::time::sleep;
 
 use super::client::SlackClient;
+use super::config::config_path;
 use super::types::{SlackChannel, SlackUser};
+
+/// Cache expiry time (1 hour)
+const CACHE_EXPIRY_SECS: u64 = 3600;
+
+/// Cached user lookup data
+#[derive(Serialize, Deserialize)]
+struct UserCache {
+    /// Timestamp when cache was created
+    created: u64,
+    /// User ID to username mapping
+    users: HashMap<String, String>,
+}
+
+/// Get path to user cache file
+fn user_cache_path() -> Option<PathBuf> {
+    config_path().map(|p| p.with_file_name("slack_users_cache.json"))
+}
 
 /// Response from conversations.list API
 #[derive(Deserialize)]
@@ -187,9 +207,59 @@ pub async fn list_users(client: &SlackClient) -> Result<Vec<SlackUser>> {
     Ok(users)
 }
 
-/// Build a lookup map from user ID to username
+/// Build a lookup map from user ID to username (with caching)
 pub async fn build_user_lookup(client: &SlackClient) -> Result<HashMap<String, String>> {
+    // Try to load from cache first
+    if let Some(cached) = load_user_cache() {
+        return Ok(cached);
+    }
+
+    // Fetch from API
     let users = list_users(client).await?;
     let lookup: HashMap<String, String> = users.into_iter().map(|u| (u.id, u.name)).collect();
+
+    // Save to cache
+    save_user_cache(&lookup);
+
     Ok(lookup)
+}
+
+/// Load user cache if valid
+fn load_user_cache() -> Option<HashMap<String, String>> {
+    let path = user_cache_path()?;
+    let contents = fs::read_to_string(&path).ok()?;
+    let cache: UserCache = serde_json::from_str(&contents).ok()?;
+
+    // Check if cache is expired
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+
+    if now - cache.created > CACHE_EXPIRY_SECS {
+        return None;
+    }
+
+    Some(cache.users)
+}
+
+/// Save user lookup to cache
+fn save_user_cache(users: &HashMap<String, String>) {
+    let Some(path) = user_cache_path() else {
+        return;
+    };
+
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let cache = UserCache {
+        created: now,
+        users: users.clone(),
+    };
+
+    if let Ok(json) = serde_json::to_string(&cache) {
+        let _ = fs::write(&path, json);
+    }
 }

@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use comfy_table::{presets::UTF8_FULL_CONDENSED, Cell, Color, ContentArrangement, Table};
+use regex::Regex;
 use std::collections::HashMap;
 
 use super::types::{OutputFormat, SlackChannel, SlackMessage, SlackSearchResult, SlackUser};
@@ -13,6 +14,51 @@ fn truncate(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len.saturating_sub(3)])
     }
+}
+
+/// Clean up Slack message text for display
+/// - Converts <@U04H482TK6Z|Adam Ladachowski> to @Adam Ladachowski
+/// - Converts <@U04H482TK6Z> to @username using lookup
+/// - Converts <#C12345678|channel-name> to #channel-name
+/// - Converts <URL|text> to text
+fn clean_message_text(text: &str, user_lookup: &HashMap<String, String>) -> String {
+    // Match Slack's special formatting: <...>
+    let re = Regex::new(r"<([^>]+)>").unwrap();
+
+    re.replace_all(text, |caps: &regex::Captures| {
+        let content = &caps[1];
+
+        if let Some(rest) = content.strip_prefix('@') {
+            // User mention: <@U12345|Display Name> or <@U12345>
+            if let Some((_, display_name)) = rest.split_once('|') {
+                format!("@{}", display_name)
+            } else {
+                // No display name, look up user ID
+                user_lookup
+                    .get(rest)
+                    .map(|name| format!("@{}", name))
+                    .unwrap_or_else(|| format!("@{}", rest))
+            }
+        } else if let Some(rest) = content.strip_prefix('#') {
+            // Channel mention: <#C12345|channel-name>
+            if let Some((_, channel_name)) = rest.split_once('|') {
+                format!("#{}", channel_name)
+            } else {
+                format!("#{}", rest)
+            }
+        } else if let Some(rest) = content.strip_prefix('!') {
+            // Special mention: <!here>, <!channel>, <!everyone>
+            format!("@{}", rest)
+        } else if content.contains('|') {
+            // URL with display text: <https://example.com|Example>
+            let (_, display) = content.split_once('|').unwrap();
+            display.to_string()
+        } else {
+            // Plain URL or other
+            content.to_string()
+        }
+    })
+    .to_string()
 }
 
 /// Format channel name for display
@@ -203,12 +249,13 @@ pub fn output_search_results(
                 let time = format_timestamp(&m.ts);
                 let user = m.username.as_deref().unwrap_or("-");
                 let channel = format_channel_name(&m.channel.name, user_lookup);
+                let text = clean_message_text(&m.text, user_lookup);
 
                 table.add_row(vec![
                     Cell::new(&channel).fg(Color::Cyan),
                     Cell::new(user),
                     Cell::new(time),
-                    Cell::new(truncate(&m.text, 50)),
+                    Cell::new(truncate(&text, 50)),
                 ]);
             }
 

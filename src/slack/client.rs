@@ -5,10 +5,14 @@
 use anyhow::Result;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use super::config::{load_config, SlackConfig};
 
 const SLACK_API_URL: &str = "https://slack.com/api";
+const MAX_RETRIES: u32 = 3;
+const DEFAULT_RETRY_SECS: u64 = 5;
 
 /// Slack API client
 pub struct SlackClient {
@@ -53,19 +57,16 @@ impl SlackClient {
     /// Make a GET request to the Slack API
     pub async fn get<T: DeserializeOwned>(&self, method: &str) -> Result<T> {
         let url = format!("{}/{}", SLACK_API_URL, method);
-        let token = self.bot_token()?;
+        let token = self.bot_token()?.to_string();
 
-        // debug!("GET {}", url);
-
-        let response = self
-            .http
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Accept", "application/json")
-            .send()
-            .await?;
-
-        self.handle_response(response).await
+        self.execute_with_retry(|| {
+            self.http
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/json")
+                .send()
+        })
+        .await
     }
 
     /// Make a GET request with query parameters
@@ -75,20 +76,21 @@ impl SlackClient {
         params: &[(&str, &str)],
     ) -> Result<T> {
         let url = format!("{}/{}", SLACK_API_URL, method);
-        let token = self.bot_token()?;
+        let token = self.bot_token()?.to_string();
+        let params: Vec<(String, String)> = params
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
 
-        // debug!("GET {} with params {:?}", url, params);
-
-        let response = self
-            .http
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Accept", "application/json")
-            .query(params)
-            .send()
-            .await?;
-
-        self.handle_response(response).await
+        self.execute_with_retry(|| {
+            self.http
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/json")
+                .query(&params)
+                .send()
+        })
+        .await
     }
 
     /// Make a GET request using user token (required for search API)
@@ -98,20 +100,21 @@ impl SlackClient {
         params: &[(&str, &str)],
     ) -> Result<T> {
         let url = format!("{}/{}", SLACK_API_URL, method);
-        let token = self.user_token()?;
+        let token = self.user_token()?.to_string();
+        let params: Vec<(String, String)> = params
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
 
-        // debug!("GET {} with user token, params {:?}", url, params);
-
-        let response = self
-            .http
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Accept", "application/json")
-            .query(params)
-            .send()
-            .await?;
-
-        self.handle_response(response).await
+        self.execute_with_retry(|| {
+            self.http
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/json")
+                .query(&params)
+                .send()
+        })
+        .await
     }
 
     /// Make a POST request to the Slack API
@@ -121,21 +124,19 @@ impl SlackClient {
         B: serde::Serialize + Sync,
     {
         let url = format!("{}/{}", SLACK_API_URL, method);
-        let token = self.bot_token()?;
+        let token = self.bot_token()?.to_string();
+        let body_json = serde_json::to_string(body)?;
 
-        // debug!("POST {}", url);
-
-        let response = self
-            .http
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(body)
-            .send()
-            .await?;
-
-        self.handle_response(response).await
+        self.execute_with_retry(|| {
+            self.http
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .body(body_json.clone())
+                .send()
+        })
+        .await
     }
 
     /// Make a POST request using user token (required for conversations.mark)
@@ -145,40 +146,25 @@ impl SlackClient {
         B: serde::Serialize + Sync,
     {
         let url = format!("{}/{}", SLACK_API_URL, method);
-        let token = self.user_token()?;
+        let token = self.user_token()?.to_string();
+        let body_json = serde_json::to_string(body)?;
 
-        // debug!("POST {} with user token", url);
-
-        let response = self
-            .http
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(body)
-            .send()
-            .await?;
-
-        self.handle_response(response).await
+        self.execute_with_retry(|| {
+            self.http
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json; charset=utf-8")
+                .body(body_json.clone())
+                .send()
+        })
+        .await
     }
 
     /// Handle API response and check for Slack-specific errors
-    async fn handle_response<T: DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
-        let status = response.status();
-
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!(format!(
-                "HTTP {}: {}",
-                status.as_u16(),
-                body
-            )));
-        }
-
-        let text = response.text().await?;
-
+    fn parse_response<T: DeserializeOwned>(&self, text: &str) -> Result<T> {
         // Slack returns { "ok": false, "error": "..." } for API errors
-        let value: serde_json::Value = serde_json::from_str(&text)
+        let value: serde_json::Value = serde_json::from_str(text)
             .map_err(|e| anyhow::anyhow!("Parse error: {}: {}", e, &text[..text.len().min(200)]))?;
 
         if let Some(ok) = value.get("ok").and_then(serde_json::Value::as_bool) {
@@ -191,7 +177,57 @@ impl SlackClient {
             }
         }
 
-        serde_json::from_str(&text)
+        serde_json::from_str(text)
             .map_err(|e| anyhow::anyhow!("Parse error: {}: {}", e, &text[..text.len().min(200)]))
+    }
+
+    /// Execute request with retry on rate limit
+    async fn execute_with_retry<F, Fut, T>(&self, request_fn: F) -> Result<T>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+        T: DeserializeOwned,
+    {
+        let mut retries = 0;
+
+        loop {
+            let response = request_fn().await?;
+            let status = response.status();
+
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                if retries >= MAX_RETRIES {
+                    return Err(anyhow::anyhow!(
+                        "Rate limited after {} retries",
+                        MAX_RETRIES
+                    ));
+                }
+
+                // Get retry delay from header or use default
+                let retry_after = response
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(DEFAULT_RETRY_SECS);
+
+                eprintln!(
+                    "Rate limited, waiting {} seconds... (retry {}/{})",
+                    retry_after,
+                    retries + 1,
+                    MAX_RETRIES
+                );
+                sleep(Duration::from_secs(retry_after)).await;
+                retries += 1;
+                continue;
+            }
+
+            if !status.is_success() {
+                let body = response.text().await.unwrap_or_default();
+                return Err(anyhow::anyhow!("HTTP {}: {}", status.as_u16(), body));
+            }
+
+            let text = response.text().await?;
+            return self.parse_response(&text);
+        }
     }
 }
