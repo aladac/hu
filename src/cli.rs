@@ -7,6 +7,7 @@ use crate::gh::GhCommand;
 use crate::jira::JiraCommand;
 use crate::newrelic::NewRelicCommand;
 use crate::pagerduty::PagerDutyCommand;
+use crate::pipeline::PipelineCommand;
 use crate::read::ReadArgs;
 use crate::sentry::SentryCommand;
 use crate::slack::SlackCommands;
@@ -71,6 +72,12 @@ pub enum Command {
     Eks {
         #[command(subcommand)]
         cmd: Option<EksCommand>,
+    },
+
+    /// CodePipeline status (read-only)
+    Pipeline {
+        #[command(subcommand)]
+        cmd: Option<PipelineCommand>,
     },
 
     /// Utility commands (fetch-html, grep)

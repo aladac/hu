@@ -8,6 +8,7 @@ mod gh;
 mod jira;
 mod newrelic;
 mod pagerduty;
+mod pipeline;
 mod read;
 mod sentry;
 mod slack;
@@ -72,10 +73,16 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
             print_subcommand_help("newrelic")?;
         }
         Command::Eks { cmd: Some(cmd) } => {
-            println!("eks: {:?}", cmd);
+            return eks::run(cmd).await;
         }
         Command::Eks { cmd: None } => {
             print_subcommand_help("eks")?;
+        }
+        Command::Pipeline { cmd: Some(cmd) } => {
+            return pipeline::run(cmd).await;
+        }
+        Command::Pipeline { cmd: None } => {
+            print_subcommand_help("pipeline")?;
         }
         Command::Utils { cmd: Some(cmd) } => {
             return utils::run_command(cmd).await;
