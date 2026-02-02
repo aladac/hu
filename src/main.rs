@@ -48,7 +48,7 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
             print_subcommand_help("gh")?;
         }
         Command::Slack { cmd: Some(cmd) } => {
-            println!("slack: {:?}", cmd);
+            return slack::run(cmd).await;
         }
         Command::Slack { cmd: None } => {
             print_subcommand_help("slack")?;

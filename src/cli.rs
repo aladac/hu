@@ -9,7 +9,7 @@ use crate::newrelic::NewRelicCommand;
 use crate::pagerduty::PagerDutyCommand;
 use crate::read::ReadArgs;
 use crate::sentry::SentryCommand;
-use crate::slack::SlackCommand;
+use crate::slack::SlackCommands;
 use crate::utils::UtilsCommand;
 
 #[derive(Parser)]
@@ -44,7 +44,7 @@ pub enum Command {
     /// Slack operations (messages, channels)
     Slack {
         #[command(subcommand)]
-        cmd: Option<SlackCommand>,
+        cmd: Option<SlackCommands>,
     },
 
     /// PagerDuty (oncall, alerts)
