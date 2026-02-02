@@ -54,7 +54,7 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
             print_subcommand_help("slack")?;
         }
         Command::PagerDuty { cmd: Some(cmd) } => {
-            println!("pagerduty: {:?}", cmd);
+            return pagerduty::run(cmd).await;
         }
         Command::PagerDuty { cmd: None } => {
             print_subcommand_help("pagerduty")?;

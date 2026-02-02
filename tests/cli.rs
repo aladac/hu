@@ -82,7 +82,7 @@ fn all_main_commands_in_help() {
 fn command_aliases_work() {
     // pd -> pagerduty
     let output = hu()
-        .args(["pd", "oncall"])
+        .args(["pd", "config"])
         .output()
         .expect("failed to execute");
     assert!(output.status.success());
@@ -156,9 +156,9 @@ fn slack_messages_runs() {
 }
 
 #[test]
-fn pagerduty_oncall_runs() {
+fn pagerduty_config_runs() {
     let output = hu()
-        .args(["pagerduty", "oncall"])
+        .args(["pagerduty", "config"])
         .output()
         .expect("failed to execute");
     assert!(output.status.success());
