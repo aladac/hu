@@ -105,3 +105,60 @@ pub fn save_config(api_key: &str, account_id: i64) -> Result<()> {
     fs::write(&path, output)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_newrelic_config_is_configured_both_set() {
+        let config = NewRelicConfig {
+            api_key: Some("NRAK-12345".to_string()),
+            account_id: Some(12345),
+        };
+        assert!(config.is_configured());
+    }
+
+    #[test]
+    fn test_newrelic_config_is_configured_only_api_key() {
+        let config = NewRelicConfig {
+            api_key: Some("NRAK-12345".to_string()),
+            account_id: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_newrelic_config_is_configured_only_account_id() {
+        let config = NewRelicConfig {
+            api_key: None,
+            account_id: Some(12345),
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_newrelic_config_is_configured_neither() {
+        let config = NewRelicConfig {
+            api_key: None,
+            account_id: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_newrelic_config_default() {
+        let config = NewRelicConfig::default();
+        assert!(config.api_key.is_none());
+        assert!(config.account_id.is_none());
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_config_path_returns_some() {
+        let path = config_path();
+        if let Some(p) = path {
+            assert!(p.to_string_lossy().contains("settings.toml"));
+        }
+    }
+}

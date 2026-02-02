@@ -266,4 +266,49 @@ mod tests {
         let result = run(args);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn run_interface_main_rs() {
+        let args = ReadArgs {
+            path: concat!(env!("CARGO_MANIFEST_DIR"), "/src/main.rs").to_string(),
+            outline: false,
+            interface: true,
+            around: None,
+            context: 10,
+            diff: false,
+            commit: "HEAD".to_string(),
+        };
+        let result = run(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_diff_head() {
+        let args = ReadArgs {
+            path: concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml").to_string(),
+            outline: false,
+            interface: false,
+            around: None,
+            context: 10,
+            diff: true,
+            commit: "HEAD".to_string(),
+        };
+        let result = run(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_diff_specific_commit() {
+        let args = ReadArgs {
+            path: concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml").to_string(),
+            outline: false,
+            interface: false,
+            around: None,
+            context: 10,
+            diff: true,
+            commit: "HEAD~1".to_string(),
+        };
+        // This may fail if HEAD~1 doesn't exist, but shouldn't panic
+        let _ = run(args);
+    }
 }

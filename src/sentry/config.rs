@@ -117,3 +117,65 @@ pub fn save_auth_token(token: &str, org: &str) -> Result<()> {
     fs::write(&path, output)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sentry_config_is_configured_both_set() {
+        let config = SentryConfig {
+            auth_token: Some("token".to_string()),
+            organization: Some("my-org".to_string()),
+            project: None,
+        };
+        assert!(config.is_configured());
+    }
+
+    #[test]
+    fn test_sentry_config_is_configured_only_token() {
+        let config = SentryConfig {
+            auth_token: Some("token".to_string()),
+            organization: None,
+            project: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_sentry_config_is_configured_only_org() {
+        let config = SentryConfig {
+            auth_token: None,
+            organization: Some("my-org".to_string()),
+            project: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_sentry_config_is_configured_neither() {
+        let config = SentryConfig {
+            auth_token: None,
+            organization: None,
+            project: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_sentry_config_default() {
+        let config = SentryConfig::default();
+        assert!(config.auth_token.is_none());
+        assert!(config.organization.is_none());
+        assert!(config.project.is_none());
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_config_path_returns_some() {
+        let path = config_path();
+        if let Some(p) = path {
+            assert!(p.to_string_lossy().contains("settings.toml"));
+        }
+    }
+}

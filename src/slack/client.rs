@@ -231,3 +231,153 @@ impl SlackClient {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::slack::config::{OAuthConfig, SlackConfig};
+
+    fn make_test_client() -> SlackClient {
+        let config = SlackConfig {
+            oauth: OAuthConfig {
+                client_id: None,
+                client_secret: None,
+                bot_token: Some("xoxb-test".to_string()),
+                user_token: Some("xoxp-test".to_string()),
+                team_id: Some("T12345".to_string()),
+                team_name: Some("Test Team".to_string()),
+            },
+            default_channel: String::new(),
+            is_configured: true,
+        };
+        let http = Client::builder().build().unwrap();
+        SlackClient { config, http }
+    }
+
+    #[test]
+    fn test_parse_response_success() {
+        let client = make_test_client();
+        let json = r#"{"ok": true, "name": "test"}"#;
+
+        #[derive(Debug, serde::Deserialize, PartialEq)]
+        struct TestResponse {
+            ok: bool,
+            name: String,
+        }
+
+        let result: Result<TestResponse> = client.parse_response(json);
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert!(resp.ok);
+        assert_eq!(resp.name, "test");
+    }
+
+    #[test]
+    fn test_parse_response_slack_error() {
+        let client = make_test_client();
+        let json = r#"{"ok": false, "error": "channel_not_found"}"#;
+
+        #[derive(Debug, serde::Deserialize)]
+        struct TestResponse {
+            ok: bool,
+        }
+
+        let result: Result<TestResponse> = client.parse_response(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("channel_not_found"));
+    }
+
+    #[test]
+    fn test_parse_response_slack_error_unknown() {
+        let client = make_test_client();
+        let json = r#"{"ok": false}"#;
+
+        #[derive(Debug, serde::Deserialize)]
+        struct TestResponse {
+            ok: bool,
+        }
+
+        let result: Result<TestResponse> = client.parse_response(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("unknown error"));
+    }
+
+    #[test]
+    fn test_parse_response_invalid_json() {
+        let client = make_test_client();
+        let json = "not json at all";
+
+        #[derive(Debug, serde::Deserialize)]
+        struct TestResponse {
+            ok: bool,
+        }
+
+        let result: Result<TestResponse> = client.parse_response(json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Parse error"));
+    }
+
+    #[test]
+    fn test_bot_token() {
+        let client = make_test_client();
+        assert_eq!(client.bot_token().unwrap(), "xoxb-test");
+    }
+
+    #[test]
+    fn test_user_token() {
+        let client = make_test_client();
+        assert_eq!(client.user_token().unwrap(), "xoxp-test");
+    }
+
+    #[test]
+    fn test_bot_token_missing() {
+        let config = SlackConfig {
+            oauth: OAuthConfig {
+                client_id: None,
+                client_secret: None,
+                bot_token: None,
+                user_token: None,
+                team_id: None,
+                team_name: None,
+            },
+            default_channel: String::new(),
+            is_configured: false,
+        };
+        let http = Client::builder().build().unwrap();
+        let client = SlackClient { config, http };
+
+        assert!(client.bot_token().is_err());
+    }
+
+    #[test]
+    fn test_user_token_missing() {
+        let config = SlackConfig {
+            oauth: OAuthConfig {
+                client_id: None,
+                client_secret: None,
+                bot_token: Some("xoxb-test".to_string()),
+                user_token: None,
+                team_id: None,
+                team_name: None,
+            },
+            default_channel: String::new(),
+            is_configured: true,
+        };
+        let http = Client::builder().build().unwrap();
+        let client = SlackClient { config, http };
+
+        assert!(client.user_token().is_err());
+    }
+
+    #[test]
+    fn test_config_accessor() {
+        let client = make_test_client();
+        assert!(client.config().is_configured);
+        assert_eq!(
+            client.config().oauth.team_name,
+            Some("Test Team".to_string())
+        );
+    }
+}

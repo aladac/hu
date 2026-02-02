@@ -107,3 +107,130 @@ pub enum OutputFormat {
     /// JSON format for scripting
     Json,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_output_format_default() {
+        let format = OutputFormat::default();
+        assert!(matches!(format, OutputFormat::Table));
+    }
+
+    #[test]
+    fn test_output_format_clone() {
+        let format = OutputFormat::Json;
+        let cloned = format.clone();
+        assert!(matches!(cloned, OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_output_format_debug() {
+        let format = OutputFormat::Table;
+        let debug = format!("{:?}", format);
+        assert_eq!(debug, "Table");
+    }
+
+    #[test]
+    fn test_slack_channel_debug() {
+        let channel = SlackChannel {
+            id: "C12345".to_string(),
+            name: "general".to_string(),
+            is_private: false,
+            is_member: true,
+            topic: Some("Test topic".to_string()),
+            purpose: None,
+            num_members: Some(100),
+            created: 1704067200,
+        };
+        let debug = format!("{:?}", channel);
+        assert!(debug.contains("SlackChannel"));
+        assert!(debug.contains("general"));
+    }
+
+    #[test]
+    fn test_slack_channel_clone() {
+        let channel = SlackChannel {
+            id: "C12345".to_string(),
+            name: "general".to_string(),
+            is_private: false,
+            is_member: true,
+            topic: None,
+            purpose: None,
+            num_members: None,
+            created: 1704067200,
+        };
+        let cloned = channel.clone();
+        assert_eq!(cloned.id, channel.id);
+        assert_eq!(cloned.name, channel.name);
+    }
+
+    #[test]
+    fn test_slack_message_debug() {
+        let msg = SlackMessage {
+            msg_type: "message".to_string(),
+            user: Some("U12345".to_string()),
+            text: "Hello world".to_string(),
+            ts: "1704067200.123456".to_string(),
+            thread_ts: None,
+            reply_count: Some(5),
+            username: None,
+        };
+        let debug = format!("{:?}", msg);
+        assert!(debug.contains("SlackMessage"));
+    }
+
+    #[test]
+    fn test_slack_user_debug() {
+        let user = SlackUser {
+            id: "U12345".to_string(),
+            team_id: Some("T12345".to_string()),
+            name: "alice".to_string(),
+            real_name: Some("Alice Smith".to_string()),
+            is_bot: false,
+            deleted: false,
+            tz: Some("America/New_York".to_string()),
+        };
+        let debug = format!("{:?}", user);
+        assert!(debug.contains("SlackUser"));
+    }
+
+    #[test]
+    fn test_slack_search_result_debug() {
+        let result = SlackSearchResult {
+            total: 42,
+            matches: vec![],
+        };
+        let debug = format!("{:?}", result);
+        assert!(debug.contains("SlackSearchResult"));
+        assert!(debug.contains("42"));
+    }
+
+    #[test]
+    fn test_slack_search_match_debug() {
+        let m = SlackSearchMatch {
+            channel: SlackSearchChannel {
+                id: "C12345".to_string(),
+                name: "general".to_string(),
+            },
+            user: Some("U12345".to_string()),
+            username: Some("alice".to_string()),
+            text: "Hello".to_string(),
+            ts: "1704067200.123456".to_string(),
+            permalink: Some("https://slack.com/...".to_string()),
+        };
+        let debug = format!("{:?}", m);
+        assert!(debug.contains("SlackSearchMatch"));
+    }
+
+    #[test]
+    fn test_slack_search_channel_clone() {
+        let channel = SlackSearchChannel {
+            id: "C12345".to_string(),
+            name: "general".to_string(),
+        };
+        let cloned = channel.clone();
+        assert_eq!(cloned.id, channel.id);
+    }
+}

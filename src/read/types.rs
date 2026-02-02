@@ -144,11 +144,53 @@ mod tests {
     }
 
     #[test]
+    fn item_kind_icon_enum() {
+        assert_eq!(ItemKind::Enum.icon(), "enum");
+    }
+
+    #[test]
+    fn item_kind_icon_trait() {
+        assert_eq!(ItemKind::Trait.icon(), "trait");
+    }
+
+    #[test]
+    fn item_kind_icon_impl() {
+        assert_eq!(ItemKind::Impl.icon(), "impl");
+    }
+
+    #[test]
+    fn item_kind_icon_class() {
+        assert_eq!(ItemKind::Class.icon(), "class");
+    }
+
+    #[test]
+    fn item_kind_icon_module() {
+        assert_eq!(ItemKind::Module.icon(), "mod");
+    }
+
+    #[test]
+    fn item_kind_icon_const() {
+        assert_eq!(ItemKind::Const.icon(), "const");
+    }
+
+    #[test]
+    fn item_kind_icon_type() {
+        assert_eq!(ItemKind::Type.icon(), "type");
+    }
+
+    #[test]
+    fn item_kind_icon_other() {
+        assert_eq!(ItemKind::Other.icon(), "");
+    }
+
+    #[test]
     fn item_kind_icon_heading() {
         assert_eq!(ItemKind::Heading(1).icon(), "#");
         assert_eq!(ItemKind::Heading(2).icon(), "##");
         assert_eq!(ItemKind::Heading(3).icon(), "###");
         assert_eq!(ItemKind::Heading(4).icon(), "####");
+        assert_eq!(ItemKind::Heading(5).icon(), "####");
+        assert_eq!(ItemKind::Heading(6).icon(), "####");
     }
 
     #[test]

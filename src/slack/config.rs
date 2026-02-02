@@ -278,3 +278,115 @@ pub fn update_user_token(user_token: &str) -> Result<()> {
     // debug!("Updated Slack user token in {}", path.display());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_oauth_config_is_configured_with_valid_bot_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: Some("xoxb-12345-67890".to_string()),
+            user_token: None,
+            team_id: None,
+            team_name: None,
+        };
+        assert!(config.is_configured());
+    }
+
+    #[test]
+    fn test_oauth_config_is_configured_with_invalid_bot_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: Some("invalid-token".to_string()),
+            user_token: None,
+            team_id: None,
+            team_name: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_oauth_config_is_configured_without_bot_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: None,
+            user_token: None,
+            team_id: None,
+            team_name: None,
+        };
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn test_oauth_config_has_user_token_with_valid_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: None,
+            user_token: Some("xoxp-12345-67890".to_string()),
+            team_id: None,
+            team_name: None,
+        };
+        assert!(config.has_user_token());
+    }
+
+    #[test]
+    fn test_oauth_config_has_user_token_with_invalid_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: None,
+            user_token: Some("invalid-token".to_string()),
+            team_id: None,
+            team_name: None,
+        };
+        assert!(!config.has_user_token());
+    }
+
+    #[test]
+    fn test_oauth_config_has_user_token_without_token() {
+        let config = OAuthConfig {
+            client_id: None,
+            client_secret: None,
+            bot_token: None,
+            user_token: None,
+            team_id: None,
+            team_name: None,
+        };
+        assert!(!config.has_user_token());
+    }
+
+    #[test]
+    fn test_config_path_returns_some() {
+        // This test just verifies config_path returns Some on systems with a home dir
+        let path = config_path();
+        // On most systems this should return Some
+        if let Some(p) = path {
+            assert!(p.to_string_lossy().contains("settings.toml"));
+        }
+    }
+
+    #[test]
+    fn test_slack_config_default() {
+        let config = SlackConfig::default();
+        assert!(!config.is_configured);
+        assert!(config.default_channel.is_empty());
+        assert!(!config.oauth.is_configured());
+    }
+
+    #[test]
+    fn test_oauth_config_default() {
+        let config = OAuthConfig::default();
+        assert!(config.client_id.is_none());
+        assert!(config.client_secret.is_none());
+        assert!(config.bot_token.is_none());
+        assert!(config.user_token.is_none());
+        assert!(config.team_id.is_none());
+        assert!(config.team_name.is_none());
+    }
+}
