@@ -4,6 +4,7 @@ mod docs_search;
 mod docs_section;
 mod fetch_html;
 mod grep;
+mod signature;
 mod web_search;
 
 pub use cli::UtilsCommand;
