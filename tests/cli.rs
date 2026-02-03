@@ -64,7 +64,6 @@ fn all_main_commands_in_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     let commands = [
-        "dashboard",
         "jira",
         "gh",
         "slack",
@@ -107,15 +106,6 @@ fn invalid_command_fails() {
 }
 
 // Test all subcommand executions for coverage
-
-#[test]
-fn dashboard_show_runs() {
-    let output = hu()
-        .args(["dashboard", "show"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-}
 
 #[test]
 fn jira_tickets_runs() {

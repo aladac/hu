@@ -2,7 +2,6 @@ use clap::{CommandFactory, Parser};
 
 mod cli;
 mod context;
-mod dashboard;
 mod eks;
 mod gh;
 mod jira;
@@ -33,9 +32,6 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_command(cmd: Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Dashboard { cmd } => {
-            println!("dashboard: {:?}", cmd);
-        }
         Command::Jira { cmd: Some(cmd) } => {
             return jira::run_command(cmd).await;
         }

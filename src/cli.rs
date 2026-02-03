@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 
 use crate::context::ContextCommand;
-use crate::dashboard::DashboardCommand;
 use crate::eks::EksCommand;
 use crate::gh::GhCommand;
 use crate::jira::JiraCommand;
@@ -24,12 +23,6 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Dev dashboard (PRs, tasks, alerts, oncall)
-    Dashboard {
-        #[command(subcommand)]
-        cmd: Option<DashboardCommand>,
-    },
-
     /// Jira operations (tickets, sprint, search)
     Jira {
         #[command(subcommand)]
