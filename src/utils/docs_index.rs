@@ -423,7 +423,11 @@ mod tests {
         // Create a hidden directory with a markdown file
         let hidden_dir = tmp_dir.join(".hidden");
         std::fs::create_dir_all(&hidden_dir).unwrap();
-        std::fs::write(hidden_dir.join("secret.md"), "# Secret\n\nHidden content.\n").unwrap();
+        std::fs::write(
+            hidden_dir.join("secret.md"),
+            "# Secret\n\nHidden content.\n",
+        )
+        .unwrap();
 
         let index = build_index(tmp_dir.to_str().unwrap()).unwrap();
 

@@ -7,7 +7,7 @@ use super::cli::ReadArgs;
 use super::diff::{format_diff, git_diff};
 use super::interface::extract_interface;
 use super::outline::extract_outline;
-use super::types::{FileOutline, ItemKind, OutlineItem};
+use super::types::{FileOutline, OutlineItem};
 
 /// Run the read command
 pub fn run(args: ReadArgs) -> Result<()> {
@@ -100,6 +100,7 @@ pub fn format_interface(items: &[OutlineItem]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::ItemKind;
     use super::*;
 
     #[test]

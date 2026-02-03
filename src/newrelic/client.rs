@@ -332,6 +332,7 @@ impl NewRelicClient {
 }
 
 /// Parse issues from GraphQL response JSON (pure function, testable)
+#[cfg(test)]
 pub fn parse_issues_response(json: &str) -> Result<Vec<Issue>> {
     #[derive(Deserialize)]
     struct IssuesResponse {
@@ -367,6 +368,7 @@ pub fn parse_issues_response(json: &str) -> Result<Vec<Issue>> {
 }
 
 /// Parse incidents from GraphQL response JSON (pure function, testable)
+#[cfg(test)]
 pub fn parse_incidents_response(json: &str) -> Result<Vec<Incident>> {
     #[derive(Deserialize)]
     struct IncidentsResponse {
@@ -402,6 +404,7 @@ pub fn parse_incidents_response(json: &str) -> Result<Vec<Incident>> {
 }
 
 /// Parse NRQL results from GraphQL response JSON (pure function, testable)
+#[cfg(test)]
 pub fn parse_nrql_response(json: &str) -> Result<Vec<serde_json::Value>> {
     #[derive(Deserialize)]
     struct NrqlResponse {
@@ -428,6 +431,7 @@ pub fn parse_nrql_response(json: &str) -> Result<Vec<serde_json::Value>> {
 }
 
 /// Build GraphQL request body (pure function, testable)
+#[cfg(test)]
 pub fn build_graphql_request(query: &str, variables: serde_json::Value) -> Result<String> {
     let request = GraphQLRequest {
         query: query.to_string(),
@@ -437,6 +441,7 @@ pub fn build_graphql_request(query: &str, variables: serde_json::Value) -> Resul
 }
 
 /// Parse GraphQL errors from response (pure function, testable)
+#[cfg(test)]
 pub fn parse_graphql_errors(json: &str) -> Option<Vec<String>> {
     #[derive(Deserialize)]
     struct ErrorResponse {
