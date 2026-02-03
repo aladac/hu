@@ -98,11 +98,6 @@ pub fn format_interface(items: &[OutlineItem]) -> String {
     output.join("\n")
 }
 
-/// Format outline item kind as icon/prefix
-fn _format_kind(kind: &ItemKind) -> &'static str {
-    kind.icon()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

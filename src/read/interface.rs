@@ -584,4 +584,86 @@ end
         let items = extract_interface("", "test.rs");
         assert!(items.is_empty());
     }
+
+    #[test]
+    fn python_nested_class_excluded() {
+        // Nested classes (indented) should be excluded
+        let content = r#"class Outer:
+    class Inner:
+        pass
+"#;
+        let items = extract_interface(content, "test.py");
+        // Only top-level class
+        assert_eq!(items.len(), 1);
+        assert!(items[0].text.contains("class Outer"));
+    }
+
+    #[test]
+    fn ruby_public_after_private() {
+        // public keyword should reset private state
+        let content = r#"class Test
+  private
+
+  def private_method
+  end
+
+  public
+
+  def public_again
+  end
+end
+"#;
+        let items = extract_interface(content, "test.rb");
+        // class + public_again (private_method is excluded)
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|i| i.text.contains("class Test")));
+        assert!(items.iter().any(|i| i.text.contains("def public_again")));
+        assert!(!items.iter().any(|i| i.text.contains("private_method")));
+    }
+
+    #[test]
+    fn ruby_nested_method_excluded() {
+        // Deeply nested methods (indent > 2) should be excluded
+        let content = r#"class Test
+  def outer
+      def inner_method
+      end
+  end
+end
+"#;
+        let items = extract_interface(content, "test.rb");
+        // class + outer method, but not inner_method
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|i| i.text.contains("class Test")));
+        assert!(items.iter().any(|i| i.text.contains("def outer")));
+        assert!(!items.iter().any(|i| i.text.contains("inner_method")));
+    }
+
+    #[test]
+    fn ruby_nested_class_excluded() {
+        // Nested classes should be excluded
+        let content = r#"class Outer
+  class Inner
+  end
+end
+"#;
+        let items = extract_interface(content, "test.rb");
+        // Only top-level class
+        assert_eq!(items.len(), 1);
+        assert!(items[0].text.contains("class Outer"));
+    }
+
+    #[test]
+    fn ruby_nested_module_excluded() {
+        // Nested modules should be excluded
+        let content = r#"module Outer
+  module Inner
+  end
+end
+"#;
+        let items = extract_interface(content, "test.rb");
+        // Only top-level module
+        assert_eq!(items.len(), 1);
+        assert!(items[0].text.contains("module Outer"));
+    }
 }
