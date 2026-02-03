@@ -38,6 +38,12 @@ impl SlackClient {
         &self.config
     }
 
+    /// Create a client for testing with explicit config and http client
+    #[cfg(test)]
+    pub fn with_config(config: SlackConfig, http: Client) -> Self {
+        Self { config, http }
+    }
+
     /// Get the bot token
     fn bot_token(&self) -> Result<&str> {
         self.config
@@ -251,7 +257,7 @@ mod tests {
             is_configured: true,
         };
         let http = Client::builder().build().unwrap();
-        SlackClient { config, http }
+        SlackClient::with_config(config, http)
     }
 
     #[test]
@@ -346,7 +352,7 @@ mod tests {
             is_configured: false,
         };
         let http = Client::builder().build().unwrap();
-        let client = SlackClient { config, http };
+        let client = SlackClient::with_config(config, http);
 
         assert!(client.bot_token().is_err());
     }
@@ -366,7 +372,7 @@ mod tests {
             is_configured: true,
         };
         let http = Client::builder().build().unwrap();
-        let client = SlackClient { config, http };
+        let client = SlackClient::with_config(config, http);
 
         assert!(client.user_token().is_err());
     }

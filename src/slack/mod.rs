@@ -458,7 +458,7 @@ mod tests {
             is_configured: false,
         };
         let http = Client::builder().build().unwrap();
-        SlackClient { config, http }
+        SlackClient::with_config(config, http)
     }
 
     fn make_configured_client() -> SlackClient {
@@ -475,7 +475,7 @@ mod tests {
             is_configured: true,
         };
         let http = Client::builder().build().unwrap();
-        SlackClient { config, http }
+        SlackClient::with_config(config, http)
     }
 
     #[test]
