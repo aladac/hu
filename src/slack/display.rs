@@ -595,4 +595,168 @@ mod tests {
         let result = output_search_results(&results, OutputFormat::Json, &lookup);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_output_channels_table_with_data() {
+        let channels = vec![
+            SlackChannel {
+                id: "C12345".to_string(),
+                name: "general".to_string(),
+                is_private: false,
+                is_member: true,
+                topic: Some("General discussion".to_string()),
+                purpose: None,
+                num_members: Some(100),
+                created: 1704067200,
+            },
+            SlackChannel {
+                id: "C67890".to_string(),
+                name: "private-team".to_string(),
+                is_private: true,
+                is_member: false,
+                topic: None,
+                purpose: None,
+                num_members: None,
+                created: 1704067200,
+            },
+        ];
+        let result = output_channels(&channels, OutputFormat::Table);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_channel_detail_json() {
+        let channel = SlackChannel {
+            id: "C12345".to_string(),
+            name: "general".to_string(),
+            is_private: false,
+            is_member: true,
+            topic: None,
+            purpose: None,
+            num_members: None,
+            created: 1704067200,
+        };
+        let result = output_channel_detail(&channel, OutputFormat::Json);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_channel_detail_table_public() {
+        // Tests the "public" branch (line 166) in table output
+        let channel = SlackChannel {
+            id: "C12345".to_string(),
+            name: "general".to_string(),
+            is_private: false, // public channel
+            is_member: true,
+            topic: Some("General chat".to_string()),
+            purpose: Some("For general discussion".to_string()),
+            num_members: Some(50),
+            created: 1704067200,
+        };
+        let result = output_channel_detail(&channel, OutputFormat::Table);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_messages_table_with_data() {
+        let messages = vec![
+            SlackMessage {
+                msg_type: "message".to_string(),
+                user: Some("U12345".to_string()),
+                text: "Hello world".to_string(),
+                ts: "1704067200.123456".to_string(),
+                thread_ts: None,
+                reply_count: Some(5),
+                username: Some("alice".to_string()),
+            },
+            SlackMessage {
+                msg_type: "message".to_string(),
+                user: None,
+                text: "Another message".to_string(),
+                ts: "1704067201.123456".to_string(),
+                thread_ts: None,
+                reply_count: None,
+                username: None,
+            },
+        ];
+        let result = output_messages(&messages, "general", OutputFormat::Table);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_users_table_with_data() {
+        let users = vec![
+            SlackUser {
+                id: "U12345".to_string(),
+                team_id: Some("T12345".to_string()),
+                name: "alice".to_string(),
+                real_name: Some("Alice Smith".to_string()),
+                is_bot: false,
+                deleted: false,
+                tz: Some("America/New_York".to_string()),
+            },
+            SlackUser {
+                id: "U67890".to_string(),
+                team_id: None,
+                name: "bob".to_string(),
+                real_name: None,
+                is_bot: true,
+                deleted: false,
+                tz: None,
+            },
+        ];
+        let result = output_users(&users, OutputFormat::Table);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_search_results_table_with_data() {
+        use crate::slack::types::{SlackSearchChannel, SlackSearchMatch};
+        let results = SlackSearchResult {
+            total: 100,
+            matches: vec![
+                SlackSearchMatch {
+                    channel: SlackSearchChannel {
+                        id: "C12345".to_string(),
+                        name: "general".to_string(),
+                    },
+                    user: Some("U12345".to_string()),
+                    username: Some("alice".to_string()),
+                    text: "Hello world".to_string(),
+                    ts: "1704067200.123456".to_string(),
+                    permalink: Some("https://slack.com/...".to_string()),
+                },
+                SlackSearchMatch {
+                    channel: SlackSearchChannel {
+                        id: "C67890".to_string(),
+                        name: "mpdm-alice--bob-1".to_string(),
+                    },
+                    user: None,
+                    username: None,
+                    text: "<@U12345|Alice> mentioned <#C99999|dev>".to_string(),
+                    ts: "1704067201.123456".to_string(),
+                    permalink: None,
+                },
+            ],
+        };
+        let mut lookup = HashMap::new();
+        lookup.insert("U12345".to_string(), "alice".to_string());
+        let result = output_search_results(&results, OutputFormat::Table, &lookup);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_output_config_status_all_configured() {
+        output_config_status(true, true, Some("Acme Corp"), "#general");
+    }
+
+    #[test]
+    fn test_output_config_status_not_configured() {
+        output_config_status(false, false, None, "");
+    }
+
+    #[test]
+    fn test_output_config_status_partial() {
+        output_config_status(true, false, Some("My Team"), "");
+    }
 }
