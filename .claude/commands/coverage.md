@@ -13,7 +13,9 @@ Improve test coverage one file at a time.
    - Which file was fixed
    - What lines were missing
    - What tests were added
-   - New coverage percentage
+   - New file coverage percentage
+   - New total coverage percentage (from tarpaulin output, e.g., "62.45% coverage")
+9. Commit the changes with message: `test({module}): improve coverage to 100%`
 
 ## Rules
 
@@ -31,4 +33,5 @@ Fixed: src/newrelic/display.rs
 - Now: 126/126 (100%)
 - Missing: Line 16 (DateTime::from_timestamp returns None for out-of-range)
 - Added: test_format_time_out_of_range
+- Total coverage: 62.45% -> 62.51%
 ```
