@@ -240,4 +240,24 @@ mod tests {
         let result = git_diff("/nonexistent/file.txt", None);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn git_diff_invalid_commit() {
+        // Using an invalid commit reference should cause git diff to fail
+        let result = git_diff(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"),
+            Some("invalid_commit_ref_that_does_not_exist_xyz123"),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("git diff failed"));
+    }
+
+    #[test]
+    fn format_diff_index_header() {
+        let diff = "index abc123..def456 100644";
+        let formatted = format_diff(diff);
+        // Should have dim color
+        assert!(formatted.contains("\x1b[2m"));
+    }
 }
