@@ -225,3 +225,40 @@ fn scopes_contain_required_permissions() {
     assert!(SCOPES.contains("read:jira-user"));
     assert!(SCOPES.contains("offline_access"));
 }
+
+/// Parse token response JSON (pure function, testable)
+fn parse_token_response(json: &serde_json::Value) -> Result<(String, String, i64)> {
+    let access_token = json["access_token"]
+        .as_str()
+        .context("Missing access_token")?
+        .to_string();
+    let refresh_token = json["refresh_token"]
+        .as_str()
+        .context("Missing refresh_token")?
+        .to_string();
+    let expires_in = json["expires_in"].as_i64().unwrap_or(3600);
+
+    Ok((access_token, refresh_token, expires_in))
+}
+
+/// Parse accessible resources JSON (pure function, testable)
+fn parse_accessible_resources(
+    json: &serde_json::Value,
+) -> Vec<super::super::types::AccessibleResource> {
+    json.as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter_map(|r| {
+            Some(super::super::types::AccessibleResource {
+                id: r["id"].as_str()?.to_string(),
+                url: r["url"].as_str()?.to_string(),
+                name: r["name"].as_str()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Parse user response JSON (pure function, testable)
+fn parse_user_response(json: &serde_json::Value) -> Option<String> {
+    json["displayName"].as_str().map(|s| s.to_string())
+}

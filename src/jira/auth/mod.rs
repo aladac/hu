@@ -1,20 +1,16 @@
 use anyhow::{bail, Context, Result};
-use axum::{
-    extract::{Query, State},
-    response::Html,
-    routing::get,
-    Router,
-};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::Rng;
-use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::util::{load_credentials, save_credentials, JiraCredentials};
 
 use super::types::OAuthConfig;
+
+mod callback;
+
+use callback::{start_callback_server, CallbackState};
 
 #[cfg(test)]
 mod tests;
@@ -24,14 +20,6 @@ const TOKEN_URL: &str = "https://auth.atlassian.com/oauth/token";
 const RESOURCES_URL: &str = "https://api.atlassian.com/oauth/token/accessible-resources";
 const CALLBACK_PORT: u16 = 9876;
 const SCOPES: &str = "read:jira-work write:jira-work read:jira-user offline_access";
-
-/// OAuth callback state
-#[derive(Debug, Clone)]
-struct CallbackState {
-    expected_state: String,
-    code: Option<String>,
-    error: Option<String>,
-}
 
 /// Load OAuth config from environment or config file
 pub fn load_oauth_config() -> Result<OAuthConfig> {
@@ -151,74 +139,6 @@ pub async fn login() -> Result<String> {
     save_jira_credentials(creds)?;
 
     Ok(user)
-}
-
-/// Start the local callback server
-async fn start_callback_server(state: Arc<Mutex<CallbackState>>) -> Result<()> {
-    let app = Router::new()
-        .route("/callback", get(handle_callback))
-        .with_state(state.clone());
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], CALLBACK_PORT));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .context("Failed to bind callback server")?;
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            // Wait until we have a code or error
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                let state_lock = state.lock().await;
-                if state_lock.code.is_some() || state_lock.error.is_some() {
-                    break;
-                }
-            }
-            // Give a moment for the response to be sent
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        })
-        .await
-        .context("Callback server failed")?;
-
-    Ok(())
-}
-
-/// Handle the OAuth callback
-async fn handle_callback(
-    State(state): State<Arc<Mutex<CallbackState>>>,
-    Query(params): Query<HashMap<String, String>>,
-) -> Html<&'static str> {
-    let mut state_lock = state.lock().await;
-
-    // Check for error
-    if let Some(error) = params.get("error") {
-        state_lock.error = Some(error.clone());
-        return Html(
-            "<html><body><h1>Authorization Failed</h1><p>You can close this window.</p></body></html>",
-        );
-    }
-
-    // Verify state parameter
-    if let Some(received_state) = params.get("state") {
-        if received_state != &state_lock.expected_state {
-            state_lock.error = Some("State mismatch - possible CSRF attack".to_string());
-            return Html(
-                "<html><body><h1>Error</h1><p>State verification failed.</p></body></html>",
-            );
-        }
-    } else {
-        state_lock.error = Some("Missing state parameter".to_string());
-        return Html("<html><body><h1>Error</h1><p>Missing state parameter.</p></body></html>");
-    }
-
-    // Get authorization code
-    if let Some(code) = params.get("code") {
-        state_lock.code = Some(code.clone());
-        Html("<html><body><h1>Success!</h1><p>You can close this window and return to the terminal.</p></body></html>")
-    } else {
-        state_lock.error = Some("Missing authorization code".to_string());
-        Html("<html><body><h1>Error</h1><p>Missing authorization code.</p></body></html>")
-    }
 }
 
 /// Token response from Atlassian
@@ -420,44 +340,4 @@ fn save_jira_credentials(jira: JiraCredentials) -> Result<()> {
     let mut creds = load_credentials().unwrap_or_default();
     creds.jira = Some(jira);
     save_credentials(&creds)
-}
-
-/// Parse token response JSON (pure function, testable)
-#[cfg(test)]
-pub fn parse_token_response(json: &serde_json::Value) -> Result<(String, String, i64)> {
-    let access_token = json["access_token"]
-        .as_str()
-        .context("Missing access_token")?
-        .to_string();
-    let refresh_token = json["refresh_token"]
-        .as_str()
-        .context("Missing refresh_token")?
-        .to_string();
-    let expires_in = json["expires_in"].as_i64().unwrap_or(3600);
-
-    Ok((access_token, refresh_token, expires_in))
-}
-
-/// Parse accessible resources JSON (pure function, testable)
-#[cfg(test)]
-pub fn parse_accessible_resources(
-    json: &serde_json::Value,
-) -> Vec<super::types::AccessibleResource> {
-    json.as_array()
-        .unwrap_or(&vec![])
-        .iter()
-        .filter_map(|r| {
-            Some(super::types::AccessibleResource {
-                id: r["id"].as_str()?.to_string(),
-                url: r["url"].as_str()?.to_string(),
-                name: r["name"].as_str()?.to_string(),
-            })
-        })
-        .collect()
-}
-
-/// Parse user response JSON (pure function, testable)
-#[cfg(test)]
-pub fn parse_user_response(json: &serde_json::Value) -> Option<String> {
-    json["displayName"].as_str().map(|s| s.to_string())
 }
