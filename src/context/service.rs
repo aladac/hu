@@ -452,4 +452,26 @@ mod tests {
         let store = MockStore::new();
         assert_eq!(store.session_id, "mock-session");
     }
+
+    #[test]
+    fn print_file_status_loaded() {
+        let entry = ContextEntry::with_timestamp(PathBuf::from("/test.rs"), 100, 10, 1000);
+        let status = FileStatus::Loaded {
+            entry,
+            age_secs: 60,
+        };
+        // Just verify it doesn't panic - output goes to stdout
+        print_file_status(&status);
+    }
+
+    #[test]
+    fn print_file_status_not_loaded() {
+        let status = FileStatus::NotLoaded {
+            path: PathBuf::from("/test.rs"),
+            size: 100,
+            line_count: 10,
+        };
+        // Just verify it doesn't panic - output goes to stdout
+        print_file_status(&status);
+    }
 }
