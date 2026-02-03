@@ -590,4 +590,42 @@ pub fn second() {}
         assert_eq!(outline.items[0].line, 2);
         assert_eq!(outline.items[1].line, 3);
     }
+
+    #[test]
+    fn js_class_methods() {
+        // Test that methods inside JavaScript classes are detected
+        let content = r#"class UserService {
+  constructor(db) {
+    this.db = db;
+  }
+
+  async findById(id) {
+    return this.db.find(id);
+  }
+
+  delete(id) {
+  }
+}
+"#;
+        let outline = extract_outline(content, "test.js");
+        // class + 3 methods (constructor, findById, delete)
+        assert_eq!(outline.len(), 4);
+        assert!(outline.items[0].text.contains("class UserService"));
+        assert!(outline.items[1].text.contains("constructor"));
+        assert!(outline.items[2].text.contains("findById"));
+        assert!(outline.items[3].text.contains("delete"));
+    }
+
+    #[test]
+    fn js_method_async() {
+        // Test async methods inside class
+        let content = r#"class Api {
+  async fetch(url) {
+  }
+}
+"#;
+        let outline = extract_outline(content, "test.js");
+        assert_eq!(outline.len(), 2);
+        assert!(outline.items[1].text.contains("async fetch"));
+    }
 }
