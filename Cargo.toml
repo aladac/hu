@@ -1,6 +1,6 @@
 [package]
 name = "hu"
-version = "0.1.0-a2"
+version = "0.1.1"
 edition = "2021"
 description = "Dev workflow CLI"
 license = "MIT"
