@@ -1,29 +1,15 @@
 List open pull requests authored by you.
 
-## Usage
+Usage: `hu gh prs`
 
-```bash
-hu gh prs
-```
+Searches all repositories for open PRs where you are the author.
 
-## Default Action
+Output (table):
+- CI status icon (✓ success, ✗ failure, ◐ pending, ○ unknown)
+- PR title
+- Link to PR
 
-List your open PRs in the current repo:
-
-```bash
-hu gh prs
-```
-
-## Output
-
-For each PR:
-- PR number and title
-- State (open/draft/merged/closed)
-- Branch name
-- CI status
-
-## Related Commands
-
-| Command | Purpose |
-|---------|---------|
-| `hu gh failures` | Extract test failures from CI |
+Related Commands:
+- `hu gh failures` - Extract test failures from CI
+- `hu gh fix` - Analyze failures and get fix context
+- `hu gh runs` - List workflow runs

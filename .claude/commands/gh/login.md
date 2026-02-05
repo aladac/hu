@@ -1,19 +1,11 @@
 Authenticate with GitHub using a Personal Access Token.
 
-## Usage
+Usage: `hu gh login -t <TOKEN>`
 
-```bash
-hu gh login -t <TOKEN>
-```
+Options:
+- `-t, --token` - Personal Access Token (required)
 
-## Options
-
-| Flag | Description |
-|------|-------------|
-| `-t, --token` | Personal Access Token (required) |
-
-## Setup
-
+Setup:
 1. Create a token at https://github.com/settings/tokens
 2. Required scopes: `repo`, `read:org`, `workflow`
 3. Run `hu gh login -t ghp_...`
