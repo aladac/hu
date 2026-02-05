@@ -1,8 +1,14 @@
 # hu
 
-Dev workflow CLI for Claude Code integration.
+Dev workflow CLI for Claude Code integration. Unifies access to Jira, GitHub, Slack, PagerDuty, Sentry, NewRelic, AWS CodePipeline, and EKS from a single tool, with built-in support for Claude Code session analytics.
 
 ## Install
+
+```bash
+cargo install hu
+```
+
+Or from source:
 
 ```bash
 cargo install --path .
@@ -25,7 +31,11 @@ hu context     Session context tracking
 hu read        Smart file reading
 ```
 
+---
+
 ### Jira
+
+Manage Jira tickets without leaving the terminal. OAuth 2.0 authentication, sprint views, JQL search, and ticket updates.
 
 ```bash
 hu jira auth                   # OAuth 2.0 authentication
@@ -40,6 +50,8 @@ hu jira update <ticket>        # Update a ticket
 ```
 
 ### GitHub
+
+GitHub workflow integration. List PRs, monitor CI runs, extract test failures, and get AI-ready investigation context for fixing broken builds.
 
 ```bash
 hu gh login -t <PAT>           # Authenticate with PAT
@@ -63,6 +75,8 @@ hu gh fix                      # Analyze CI failures, output investigation conte
 
 ### Slack
 
+Slack workspace access. Send messages, search history, list channels, and bulk-tidy unread channels without direct mentions.
+
 ```bash
 hu slack auth                  # Authenticate with Slack
   --token <xoxb-...>           #   Bot token
@@ -82,6 +96,8 @@ hu slack tidy                  # Mark channels as read if no mentions
 ```
 
 ### PagerDuty
+
+On-call schedules, active alerts, and incident management. Quickly check who's on call or review incident details.
 
 ```bash
 hu pagerduty auth <token>      # Set API token
@@ -106,6 +122,8 @@ hu pd ...                      # Alias: pd -> pagerduty
 
 ### Sentry
 
+Error tracking integration. List unresolved issues, view error details, and browse event history.
+
 ```bash
 hu sentry auth <token>         # Set auth token
 hu sentry config               # Show configuration status
@@ -115,6 +133,8 @@ hu sentry events <id>          # List events for an issue
 ```
 
 ### NewRelic
+
+Application performance monitoring. Query NRQL, list incidents and issues, check system health.
 
 ```bash
 hu newrelic auth <key>         # Set API key
@@ -130,6 +150,8 @@ hu nr ...                      # Alias: nr -> newrelic
 
 ### Pipeline (AWS CodePipeline)
 
+Monitor AWS CodePipeline deployments. List pipelines, check stage status, review execution history.
+
 ```bash
 hu pipeline list               # List all pipelines
   -r, --region <region>        #   AWS region
@@ -144,6 +166,8 @@ hu pipeline history <name>     # Show execution history
 ```
 
 ### EKS
+
+Kubernetes pod access for EKS clusters. List pods, exec into containers, tail logs.
 
 ```bash
 hu eks list                    # List pods in the cluster
@@ -166,6 +190,8 @@ hu eks logs <pod>              # Tail logs from a pod
 ```
 
 ### Data (Claude Code Sessions)
+
+Sync and analyze Claude Code session data. Track usage statistics, search message history, monitor tool usage, and analyze costs.
 
 ```bash
 hu data sync                   # Sync Claude data to local database
@@ -190,7 +216,7 @@ hu data todos list             # List all todos
 hu data todos pending          # Show pending todos
   -p, --project <dir>          #   Filter by project
   -j, --json                   #   Output as JSON
-hu data search <query>         # Search messages
+hu data search <query>         # Search messages (full-text)
   -n, --limit <n>              #   Max results (default: 20)
   -j, --json                   #   Output as JSON
 hu data tools                  # Tool usage statistics
@@ -199,7 +225,7 @@ hu data tools                  # Tool usage statistics
 hu data errors                 # Extract errors from debug logs
   -r, --recent <days>          #   Days to look back (default: 7)
   -j, --json                   #   Output as JSON
-hu data pricing                # Pricing analysis
+hu data pricing                # Pricing analysis vs API costs
   -s, --subscription <tier>    #   Subscription tier (default: max20x)
   -b, --billing-day <day>      #   Billing day of month (default: 6)
   -j, --json                   #   Output as JSON
@@ -210,6 +236,8 @@ hu data branches               # Branch activity statistics
 ```
 
 ### Utils
+
+General-purpose utilities for web content, code search, and documentation.
 
 ```bash
 # Fetch HTML and convert to markdown
@@ -222,7 +250,7 @@ hu utils fetch-html <url>
   -o, --output <file>          # Output to file
   -r, --raw                    # Raw output (no filtering)
 
-# Smart grep with token-saving
+# Smart grep with token-saving options
 hu utils grep <pattern> [path]
   --refs                       # File:line references only
   --unique                     # Deduplicate similar matches
@@ -233,7 +261,7 @@ hu utils grep <pattern> [path]
   -i, --ignore-case            # Case insensitive
   --hidden                     # Include hidden files
 
-# Web search
+# Web search (requires Brave Search API key)
 hu utils web-search <query>
   -n, --results <n>            # Number of results (default: 3)
   -l, --list                   # Show results only (don't fetch)
@@ -249,7 +277,7 @@ hu utils docs-section <f> <h>  # Extract section from markdown
 
 ### Context Tracking
 
-Prevent duplicate file reads in Claude Code sessions:
+Track which files have been loaded in a Claude Code session to prevent duplicate reads and save tokens.
 
 ```bash
 hu context track <file...>     # Mark file(s) as loaded
@@ -260,7 +288,7 @@ hu context clear               # Reset tracking
 
 ### Smart File Reading
 
-Token-efficient file reading for AI agents:
+Token-efficient file reading modes for AI agents. Get outlines, public interfaces, or focused diffs instead of full file contents.
 
 ```bash
 hu read <file>
@@ -271,6 +299,10 @@ hu read <file>
   -d, --diff                   # Git diff
   --commit <ref>               # Diff against commit (default: HEAD)
 ```
+
+## Configuration
+
+Credentials are stored in `~/.config/hu/credentials.toml`. Settings in `~/.config/hu/settings.toml`.
 
 ## Development
 
