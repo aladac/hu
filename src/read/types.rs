@@ -87,7 +87,6 @@ impl FileOutline {
 }
 
 /// Result of reading a file with options
-#[cfg(test)]
 #[derive(Debug, Clone)]
 pub enum ReadOutput {
     /// Full file content

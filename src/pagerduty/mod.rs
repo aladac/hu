@@ -6,13 +6,15 @@ mod cli;
 mod client;
 mod config;
 mod display;
+mod service;
 pub mod types;
 
 use anyhow::Result;
 
 pub use cli::PagerDutyCommand;
 use cli::StatusFilter;
-use client::{PagerDutyApi, PagerDutyClient};
+use client::PagerDutyClient;
+use service::{IncidentOptions, OncallOptions};
 use types::{IncidentStatus, OutputFormat};
 
 /// Run a PagerDuty command
@@ -36,42 +38,32 @@ pub async fn run(cmd: PagerDutyCommand) -> Result<()> {
     }
 }
 
-/// Check if client is configured
-fn check_configured(client: &PagerDutyClient) -> Result<()> {
-    if !client.config().is_configured() {
-        anyhow::bail!(
-            "PagerDuty not configured. Run: hu pagerduty auth <token>\n\
-             Or set PAGERDUTY_API_TOKEN environment variable."
-        );
-    }
-    Ok(())
-}
-
 /// Show config status
 fn cmd_config() -> Result<()> {
-    let config = config::load_config()?;
+    let config = service::get_config()?;
     display::output_config_status(&config);
     Ok(())
 }
 
 /// Save API token
 fn cmd_auth(token: &str) -> Result<()> {
-    config::save_config(token)?;
+    service::save_auth(token)?;
     println!("PagerDuty API token saved.");
     Ok(())
 }
 
 /// Show who's on call
 async fn cmd_oncall(policy: Option<&str>, schedule: Option<&str>, json: bool) -> Result<()> {
+    let config = service::get_config()?;
+    service::ensure_configured(&config)?;
+
     let client = PagerDutyClient::new()?;
-    check_configured(&client)?;
+    let opts = OncallOptions {
+        policy_id: policy.map(|p| p.to_string()),
+        schedule_id: schedule.map(|s| s.to_string()),
+    };
 
-    let policy_ids = policy.map(|p| vec![p.to_string()]);
-    let schedule_ids = schedule.map(|s| vec![s.to_string()]);
-
-    let oncalls = client
-        .list_oncalls(schedule_ids.as_deref(), policy_ids.as_deref())
-        .await?;
+    let oncalls = service::list_oncalls(&client, &opts).await?;
 
     let format = if json {
         OutputFormat::Json
@@ -84,11 +76,11 @@ async fn cmd_oncall(policy: Option<&str>, schedule: Option<&str>, json: bool) ->
 
 /// List active alerts (triggered + acknowledged)
 async fn cmd_alerts(limit: usize, json: bool) -> Result<()> {
-    let client = PagerDutyClient::new()?;
-    check_configured(&client)?;
+    let config = service::get_config()?;
+    service::ensure_configured(&config)?;
 
-    let statuses = vec![IncidentStatus::Triggered, IncidentStatus::Acknowledged];
-    let incidents = client.list_incidents(&statuses, limit).await?;
+    let client = PagerDutyClient::new()?;
+    let incidents = service::list_alerts(&client, limit).await?;
 
     let format = if json {
         OutputFormat::Json
@@ -101,11 +93,15 @@ async fn cmd_alerts(limit: usize, json: bool) -> Result<()> {
 
 /// List incidents with optional status filter
 async fn cmd_incidents(status: Option<StatusFilter>, limit: usize, json: bool) -> Result<()> {
-    let client = PagerDutyClient::new()?;
-    check_configured(&client)?;
+    let config = service::get_config()?;
+    service::ensure_configured(&config)?;
 
-    let statuses = status_filter_to_statuses(status);
-    let incidents = client.list_incidents(&statuses, limit).await?;
+    let client = PagerDutyClient::new()?;
+    let opts = IncidentOptions {
+        statuses: status_filter_to_statuses(status),
+        limit,
+    };
+    let incidents = service::list_incidents(&client, &opts).await?;
 
     let format = if json {
         OutputFormat::Json
@@ -118,10 +114,11 @@ async fn cmd_incidents(status: Option<StatusFilter>, limit: usize, json: bool) -
 
 /// Show incident details
 async fn cmd_show(id: &str, json: bool) -> Result<()> {
-    let client = PagerDutyClient::new()?;
-    check_configured(&client)?;
+    let config = service::get_config()?;
+    service::ensure_configured(&config)?;
 
-    let incident = client.get_incident(id).await?;
+    let client = PagerDutyClient::new()?;
+    let incident = service::get_incident(&client, id).await?;
 
     let format = if json {
         OutputFormat::Json
@@ -134,10 +131,11 @@ async fn cmd_show(id: &str, json: bool) -> Result<()> {
 
 /// Show current user info
 async fn cmd_whoami(json: bool) -> Result<()> {
-    let client = PagerDutyClient::new()?;
-    check_configured(&client)?;
+    let config = service::get_config()?;
+    service::ensure_configured(&config)?;
 
-    let user = client.get_current_user().await?;
+    let client = PagerDutyClient::new()?;
+    let user = service::get_current_user(&client).await?;
 
     let format = if json {
         OutputFormat::Json
@@ -207,22 +205,20 @@ mod tests {
     }
 
     #[test]
-    fn check_configured_with_token_succeeds() {
-        let client = PagerDutyClient::new().unwrap();
-        // Create a config with a token for testing
+    fn ensure_configured_with_token_succeeds() {
         let config = PagerDutyConfig {
             api_token: Some("test-token".to_string()),
             ..Default::default()
         };
-        // We can't directly test check_configured with a custom config via client,
-        // but we can verify the logic
-        assert!(config.is_configured());
+        let result = service::ensure_configured(&config);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn check_configured_without_token_fails() {
+    fn ensure_configured_without_token_fails() {
         let config = PagerDutyConfig::default();
-        assert!(!config.is_configured());
+        let result = service::ensure_configured(&config);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -232,18 +228,6 @@ mod tests {
         // In a real scenario, we'd mock the file system
         let result = cmd_auth("test-token-12345");
         // Either succeeds or fails due to file system permissions
-        let _ = result;
-    }
-
-    // Test check_configured directly
-    #[test]
-    fn check_configured_returns_error_when_not_configured() {
-        // Create client and check - the client loads from env/file
-        // If PAGERDUTY_API_TOKEN is not set, it should not be configured
-        let client = PagerDutyClient::new().unwrap();
-        let result = check_configured(&client);
-        // Result depends on whether token is configured in environment
-        // This exercises the code path
         let _ = result;
     }
 }

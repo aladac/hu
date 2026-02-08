@@ -209,13 +209,6 @@ fn client_new_creates_instance() {
 }
 
 #[test]
-fn client_config_returns_reference() {
-    let client = PagerDutyClient::new().unwrap();
-    let _config = client.config();
-    // Just verify we get a reference without panic
-}
-
-#[test]
 fn api_token_returns_error_when_not_set() {
     let client = PagerDutyClient::new().unwrap();
     // If no token is configured, api_token() should return error

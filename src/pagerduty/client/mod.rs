@@ -61,11 +61,6 @@ impl PagerDutyClient {
         Ok(Self { config, http })
     }
 
-    /// Get config reference
-    pub fn config(&self) -> &PagerDutyConfig {
-        &self.config
-    }
-
     /// Get API token
     fn api_token(&self) -> Result<&str> {
         self.config
