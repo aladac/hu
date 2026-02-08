@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/hu.svg)](https://crates.io/crates/hu)
 [![Downloads](https://img.shields.io/crates/d/hu.svg)](https://crates.io/crates/hu)
-[![CI](https://github.com/aladac/hu/actions/workflows/ci.yml/badge.svg)](https://github.com/aladac/hu/actions/workflows/ci.yml)
+[![CI](https://github.com/aladac/hu/actions/workflows/test.yml/badge.svg)](https://github.com/aladac/hu/actions/workflows/test.yml)
 
 Token-efficient dev workflow CLI for Claude Code. Optimizes context usage through smart file reading, context tracking, and pre-tool hooks.
 
