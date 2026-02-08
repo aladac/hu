@@ -351,8 +351,12 @@ async fn build_fix_report_uses_current_branch() {
         pr_for_branch: None,
     };
     let q = query("o", "r"); // no pr, run, or branch set
-    let result = build_fix_report(&mock, &q).await.unwrap();
-    assert!(result.is_none());
+    let result = build_fix_report(&mock, &q).await;
+    // In CI (detached HEAD for tags), this returns an error - that's expected
+    match result {
+        Ok(r) => assert!(r.is_none()),
+        Err(e) => assert!(e.to_string().contains("Not on a branch")),
+    }
 }
 
 #[tokio::test]
