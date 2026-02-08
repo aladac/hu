@@ -14,4 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo publish
+      - name: Get OIDC token and publish
+        run: |
+          # Get OIDC token from GitHub
+          OIDC_TOKEN=$(curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=crates.io" \
+            -H "Accept: application/json" \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            | jq -r '.value')
+
+          # Exchange for crates.io token
+          CRATES_TOKEN=$(curl -sLS "https://crates.io/api/v1/tokens/oidc" \
+            -H "Content-Type: application/json" \
+            -d "{\"oidc_token\": \"${OIDC_TOKEN}\"}" \
+            | jq -r '.token')
+
+          # Publish
+          cargo publish --token "${CRATES_TOKEN}"
