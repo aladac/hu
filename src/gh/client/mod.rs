@@ -42,6 +42,13 @@ pub trait GithubApi: Send + Sync {
         branch: &str,
     ) -> impl std::future::Future<Output = Result<Option<u64>>> + Send;
 
+    /// Get the latest failed workflow run for a repo (any branch)
+    fn get_latest_failed_run(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> impl std::future::Future<Output = Result<Option<u64>>> + Send;
+
     /// Get failed jobs for a workflow run
     fn get_failed_jobs(
         &self,
@@ -341,6 +348,22 @@ impl GithubApi for GithubClient {
                 format!(
                     "/repos/{}/{}/actions/runs?branch={}&status=failure&per_page=1",
                     owner, repo, branch
+                ),
+                None::<&()>,
+            )
+            .await
+            .context("Failed to get workflow runs")?;
+
+        Ok(extract_run_id(&runs))
+    }
+
+    async fn get_latest_failed_run(&self, owner: &str, repo: &str) -> Result<Option<u64>> {
+        let runs: serde_json::Value = self
+            .client
+            .get(
+                format!(
+                    "/repos/{}/{}/actions/runs?status=failure&per_page=1",
+                    owner, repo
                 ),
                 None::<&()>,
             )

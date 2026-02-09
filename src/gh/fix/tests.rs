@@ -33,6 +33,10 @@ impl GithubApi for MockGithubApi {
         Ok(self.run_id)
     }
 
+    async fn get_latest_failed_run(&self, _owner: &str, _repo: &str) -> Result<Option<u64>> {
+        Ok(self.run_id)
+    }
+
     async fn get_failed_jobs(
         &self,
         _owner: &str,
@@ -283,6 +287,10 @@ impl GithubApi for MockGithubApiWithLogError {
         _repo: &str,
         _branch: &str,
     ) -> Result<Option<u64>> {
+        Ok(self.run_id)
+    }
+
+    async fn get_latest_failed_run(&self, _owner: &str, _repo: &str) -> Result<Option<u64>> {
         Ok(self.run_id)
     }
 

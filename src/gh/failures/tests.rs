@@ -37,6 +37,10 @@ impl GithubApi for MockGithubApi {
         Ok(self.run_id)
     }
 
+    async fn get_latest_failed_run(&self, _owner: &str, _repo: &str) -> Result<Option<u64>> {
+        Ok(self.run_id)
+    }
+
     async fn get_failed_jobs(
         &self,
         _owner: &str,
@@ -76,44 +80,46 @@ impl GithubApi for MockGithubApi {
     }
 }
 
+// PR-based tests
+
 #[tokio::test]
-async fn process_failures_no_failed_runs() {
+async fn process_pr_failures_no_failed_runs() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: None,
         failed_jobs: vec![],
         logs: String::new(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn process_failures_no_failed_jobs() {
+async fn process_pr_failures_no_failed_jobs() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: Some(1),
         failed_jobs: vec![],
         logs: String::new(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn process_failures_no_test_jobs() {
+async fn process_pr_failures_no_test_jobs() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: Some(1),
         failed_jobs: vec![(1, "build".to_string()), (2, "deploy".to_string())],
         logs: String::new(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn process_failures_with_test_failures() {
+async fn process_pr_failures_with_test_failures() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: Some(1),
@@ -131,19 +137,19 @@ rspec ./spec/test_spec.rb:10 # Test fails
 "#
         .to_string(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn process_failures_empty_logs() {
+async fn process_pr_failures_empty_logs() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: Some(1),
         failed_jobs: vec![(1, "test-suite".to_string())],
         logs: String::new(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
@@ -178,6 +184,10 @@ impl GithubApi for MockGithubApiWithLogError {
         _repo: &str,
         _branch: &str,
     ) -> Result<Option<u64>> {
+        Ok(self.run_id)
+    }
+
+    async fn get_latest_failed_run(&self, _owner: &str, _repo: &str) -> Result<Option<u64>> {
         Ok(self.run_id)
     }
 
@@ -221,18 +231,18 @@ impl GithubApi for MockGithubApiWithLogError {
 }
 
 #[tokio::test]
-async fn process_failures_handles_log_fetch_error() {
+async fn process_pr_failures_handles_log_fetch_error() {
     let mock = MockGithubApiWithLogError {
         branch: "feature".to_string(),
         run_id: Some(42),
         failed_jobs: vec![(100, "rspec-tests".to_string())],
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
-async fn process_failures_multiple_test_jobs() {
+async fn process_pr_failures_multiple_test_jobs() {
     let mock = MockGithubApi {
         branch: "main".to_string(),
         run_id: Some(1),
@@ -254,6 +264,66 @@ rspec ./spec/test_spec.rb:10 # Test fails
 "#
         .to_string(),
     };
-    let result = process_failures(&mock, "owner", "repo", 123).await;
+    let result = process_pr_failures(&mock, "owner", "repo", 123).await;
+    assert!(result.is_ok());
+}
+
+// Repo-based tests (no PR)
+
+#[tokio::test]
+async fn process_repo_failures_no_failed_runs() {
+    let mock = MockGithubApi {
+        branch: String::new(),
+        run_id: None,
+        failed_jobs: vec![],
+        logs: String::new(),
+    };
+    let result = process_repo_failures(&mock, "owner", "repo").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn process_repo_failures_no_failed_jobs() {
+    let mock = MockGithubApi {
+        branch: String::new(),
+        run_id: Some(1),
+        failed_jobs: vec![],
+        logs: String::new(),
+    };
+    let result = process_repo_failures(&mock, "owner", "repo").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn process_repo_failures_with_test_failures() {
+    let mock = MockGithubApi {
+        branch: String::new(),
+        run_id: Some(1),
+        failed_jobs: vec![(1, "rspec-tests".to_string())],
+        logs: r#"
+Failures:
+
+  1) Test fails
+     Failure/Error: expect(1).to eq(2)
+       expected: 2
+
+Failed examples:
+
+rspec ./spec/test_spec.rb:10 # Test fails
+"#
+        .to_string(),
+    };
+    let result = process_repo_failures(&mock, "owner", "repo").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn process_repo_failures_handles_log_fetch_error() {
+    let mock = MockGithubApiWithLogError {
+        branch: String::new(),
+        run_id: Some(42),
+        failed_jobs: vec![(100, "rspec-tests".to_string())],
+    };
+    let result = process_repo_failures(&mock, "owner", "repo").await;
     assert!(result.is_ok());
 }

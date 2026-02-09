@@ -219,16 +219,14 @@ Opens browser for OAuth flow, stores credentials in `~/.config/hu/credentials.to
 pub const CMD_JIRA_TICKETS: &str = r#"List my tickets in current sprint.
 
 ```bash
-hu jira tickets           # List assigned tickets
-hu jira tickets -j        # JSON output
+hu jira tickets
 ```
 "#;
 
 pub const CMD_JIRA_SPRINT: &str = r#"Show all issues in current sprint.
 
 ```bash
-hu jira sprint            # List all sprint issues
-hu jira sprint -j         # JSON output
+hu jira sprint
 ```
 "#;
 
@@ -236,24 +234,24 @@ pub const CMD_JIRA_SEARCH: &str = r#"Search tickets using JQL.
 
 ```bash
 hu jira search "project = PROJ AND status = Open"
-hu jira search "assignee = currentUser()" -j
+hu jira search "assignee = currentUser()"
 ```
 "#;
 
 pub const CMD_JIRA_SHOW: &str = r#"Show ticket details.
 
 ```bash
-hu jira show PROJ-123     # Show ticket details
-hu jira show PROJ-123 -j  # JSON output
+hu jira show PROJ-123             # Show ticket details
+hu jira show PROJ-123 --json      # JSON output
 ```
 "#;
 
 pub const CMD_JIRA_UPDATE: &str = r#"Update a Jira ticket.
 
 ```bash
+hu jira update PROJ-123 --summary "New title"
 hu jira update PROJ-123 --status "In Progress"
-hu jira update PROJ-123 --assignee "user@example.com"
-hu jira update PROJ-123 --comment "Working on this"
+hu jira update PROJ-123 --assign me
 ```
 "#;
 
@@ -264,45 +262,45 @@ hu jira update PROJ-123 --comment "Working on this"
 pub const CMD_GH_LOGIN: &str = r#"Authenticate with GitHub using a Personal Access Token.
 
 ```bash
-hu gh login <token>
+hu gh login --token ghp_xxx
 ```
-
-Stores token in `~/.config/hu/credentials.toml`.
 "#;
 
 pub const CMD_GH_PRS: &str = r#"List open pull requests authored by you.
 
 ```bash
-hu gh prs                 # List your PRs
-hu gh prs -s "search"     # Search PRs
-hu gh prs -j              # JSON output
+hu gh prs
 ```
 "#;
 
 pub const CMD_GH_RUNS: &str = r#"List GitHub workflow runs.
 
 ```bash
-hu gh runs                # List recent runs
-hu gh runs -b main        # Filter by branch
-hu gh runs -j             # JSON output
+hu gh runs                        # List recent runs
+hu gh runs BFR-1234               # Find runs for ticket
+hu gh runs -s failure             # Filter by status
+hu gh runs -b feature-branch      # Filter by branch
+hu gh runs -n 50 --json           # Limit results, JSON output
 ```
 "#;
 
 pub const CMD_GH_FAILURES: &str = r#"Extract test failures from CI.
 
 ```bash
-hu gh failures            # Get failures from current branch
-hu gh failures --pr 123   # Get failures from PR
-hu gh failures -j         # JSON output
+hu gh failures                    # Latest failed run in current repo
+hu gh failures --pr 123           # Failures for specific PR
+hu gh failures -r owner/repo      # Specify repository
 ```
 "#;
 
 pub const CMD_GH_FIX: &str = r#"Analyze CI failures and output investigation context.
 
 ```bash
-hu gh fix                 # Analyze failures from current branch
-hu gh fix --pr 123        # Analyze failures from PR
-hu gh fix -j              # JSON output with file paths
+hu gh fix                         # Analyze current branch
+hu gh fix --pr 123                # Analyze specific PR
+hu gh fix --run 456               # Analyze specific run ID
+hu gh fix -b feature-branch       # Analyze specific branch
+hu gh fix --json                  # Output as JSON
 ```
 "#;
 
@@ -313,24 +311,26 @@ hu gh fix -j              # JSON output with file paths
 pub const CMD_SLACK_AUTH: &str = r#"Authenticate with Slack (OAuth flow or direct token).
 
 ```bash
-hu slack auth             # Start OAuth flow
-hu slack auth <token>     # Use direct token
+hu slack auth                     # Start OAuth flow
+hu slack auth --token xoxb-xxx    # Use bot token directly
+hu slack auth -u xoxp-xxx         # Add user token for search
 ```
 "#;
 
 pub const CMD_SLACK_CHANNELS: &str = r#"List channels in the workspace.
 
 ```bash
-hu slack channels         # List all channels
-hu slack channels -j      # JSON output
+hu slack channels                 # List all channels
+hu slack channels --json          # JSON output
 ```
 "#;
 
 pub const CMD_SLACK_INFO: &str = r#"Show channel details.
 
 ```bash
-hu slack info #channel    # Show channel info
-hu slack info C123456     # By channel ID
+hu slack info #general            # By channel name
+hu slack info C12345678           # By channel ID
+hu slack info #general --json     # JSON output
 ```
 "#;
 
@@ -345,47 +345,49 @@ hu slack send C123456 "Message text"
 pub const CMD_SLACK_HISTORY: &str = r#"Show message history for a channel.
 
 ```bash
-hu slack history #channel      # Recent messages
-hu slack history #channel -n 50  # Last 50 messages
+hu slack history #general         # Recent messages
+hu slack history #general -l 50   # Last 50 messages
+hu slack history C12345 --json    # By ID, JSON output
 ```
 "#;
 
 pub const CMD_SLACK_SEARCH: &str = r#"Search Slack messages.
 
 ```bash
-hu slack search "query"        # Search messages
-hu slack search "from:@user"   # Search by user
+hu slack search "query"           # Search messages
+hu slack search "from:@user"      # Search by user
+hu slack search "query" -n 50     # Limit results
+hu slack search "query" --json    # JSON output
 ```
 "#;
 
 pub const CMD_SLACK_USERS: &str = r#"List users in the workspace.
 
 ```bash
-hu slack users            # List all users
-hu slack users -j         # JSON output
+hu slack users                    # List all users
+hu slack users --json             # JSON output
 ```
 "#;
 
 pub const CMD_SLACK_CONFIG: &str = r#"Show Slack configuration status.
 
 ```bash
-hu slack config           # Show config
-hu slack config -j        # JSON output
+hu slack config
 ```
 "#;
 
 pub const CMD_SLACK_WHOAMI: &str = r#"Show current user info from token.
 
 ```bash
-hu slack whoami           # Show current user
+hu slack whoami
 ```
 "#;
 
 pub const CMD_SLACK_TIDY: &str = r#"Mark channels as read if no direct mentions.
 
 ```bash
-hu slack tidy             # Tidy all channels
-hu slack tidy -d          # Dry run
+hu slack tidy                     # Tidy all channels
+hu slack tidy --dry-run           # Dry run
 ```
 "#;
 
@@ -396,8 +398,7 @@ hu slack tidy -d          # Dry run
 pub const CMD_PD_CONFIG: &str = r#"Show PagerDuty configuration status.
 
 ```bash
-hu pagerduty config       # Show config
-hu pagerduty config -j    # JSON output
+hu pagerduty config
 ```
 "#;
 
@@ -411,33 +412,36 @@ hu pagerduty auth <token>
 pub const CMD_PD_ONCALL: &str = r#"Show who's currently on call.
 
 ```bash
-hu pagerduty oncall       # Show on-call
-hu pagerduty oncall -j    # JSON output
+hu pagerduty oncall               # Show on-call
+hu pagerduty oncall -p POLICY_ID  # Filter by policy
+hu pagerduty oncall --json        # JSON output
 ```
 "#;
 
 pub const CMD_PD_ALERTS: &str = r#"List active alerts (triggered + acknowledged).
 
 ```bash
-hu pagerduty alerts       # List alerts
-hu pagerduty alerts -j    # JSON output
+hu pagerduty alerts               # List alerts
+hu pagerduty alerts -l 50         # Limit results
+hu pagerduty alerts --json        # JSON output
 ```
 "#;
 
 pub const CMD_PD_INCIDENTS: &str = r#"List incidents with filters.
 
 ```bash
-hu pagerduty incidents              # List incidents
-hu pagerduty incidents --status triggered
-hu pagerduty incidents -j           # JSON output
+hu pagerduty incidents                    # List incidents
+hu pagerduty incidents -s triggered       # Filter by status
+hu pagerduty incidents -s active          # Triggered + acknowledged
+hu pagerduty incidents --json             # JSON output
 ```
 "#;
 
 pub const CMD_PD_SHOW: &str = r#"Show incident details.
 
 ```bash
-hu pagerduty show <incident-id>
-hu pagerduty show <incident-id> -j  # JSON output
+hu pagerduty show P123ABC
+hu pagerduty show P123ABC --json    # JSON output
 ```
 "#;
 
@@ -445,6 +449,7 @@ pub const CMD_PD_WHOAMI: &str = r#"Show current PagerDuty user info.
 
 ```bash
 hu pagerduty whoami
+hu pagerduty whoami --json          # JSON output
 ```
 "#;
 
@@ -455,39 +460,41 @@ hu pagerduty whoami
 pub const CMD_SENTRY_CONFIG: &str = r#"Show Sentry configuration status.
 
 ```bash
-hu sentry config          # Show config
-hu sentry config -j       # JSON output
+hu sentry config
 ```
 "#;
 
 pub const CMD_SENTRY_AUTH: &str = r#"Set Sentry auth token.
 
 ```bash
-hu sentry auth <token>
+hu sentry auth --org my-org AUTH_TOKEN
 ```
 "#;
 
 pub const CMD_SENTRY_ISSUES: &str = r#"List Sentry issues.
 
 ```bash
-hu sentry issues          # List recent issues
-hu sentry issues -j       # JSON output
+hu sentry issues                    # List recent issues
+hu sentry issues -p my-project      # Filter by project
+hu sentry issues -q "is:unresolved" # Search query
+hu sentry issues --json             # JSON output
 ```
 "#;
 
 pub const CMD_SENTRY_SHOW: &str = r#"Show Sentry issue details.
 
 ```bash
-hu sentry show <issue-id>
-hu sentry show <issue-id> -j  # JSON output
+hu sentry show 12345678
+hu sentry show 12345678 --json      # JSON output
 ```
 "#;
 
 pub const CMD_SENTRY_EVENTS: &str = r#"List events for a Sentry issue.
 
 ```bash
-hu sentry events <issue-id>
-hu sentry events <issue-id> -j  # JSON output
+hu sentry events 12345678
+hu sentry events 12345678 -l 50     # Limit results
+hu sentry events 12345678 --json    # JSON output
 ```
 "#;
 
@@ -498,31 +505,32 @@ hu sentry events <issue-id> -j  # JSON output
 pub const CMD_NR_CONFIG: &str = r#"Show NewRelic configuration status.
 
 ```bash
-hu newrelic config        # Show config
-hu newrelic config -j     # JSON output
+hu newrelic config
 ```
 "#;
 
 pub const CMD_NR_AUTH: &str = r#"Set NewRelic API key and account ID.
 
 ```bash
-hu newrelic auth <api-key> <account-id>
+hu newrelic auth --account 1234567 NRAK-xxx
 ```
 "#;
 
 pub const CMD_NR_ISSUES: &str = r#"List recent NewRelic issues.
 
 ```bash
-hu newrelic issues        # List issues
-hu newrelic issues -j     # JSON output
+hu newrelic issues                  # List issues
+hu newrelic issues -l 50            # Limit results
+hu newrelic issues --json           # JSON output
 ```
 "#;
 
 pub const CMD_NR_INCIDENTS: &str = r#"List recent NewRelic incidents.
 
 ```bash
-hu newrelic incidents     # List incidents
-hu newrelic incidents -j  # JSON output
+hu newrelic incidents               # List incidents
+hu newrelic incidents -l 50         # Limit results
+hu newrelic incidents --json        # JSON output
 ```
 "#;
 
@@ -530,7 +538,7 @@ pub const CMD_NR_QUERY: &str = r#"Run NRQL query.
 
 ```bash
 hu newrelic query "SELECT * FROM Transaction LIMIT 10"
-hu newrelic query "SELECT count(*) FROM Transaction" -j
+hu newrelic query "SELECT count(*) FROM Transaction" --json
 ```
 "#;
 
@@ -541,28 +549,31 @@ hu newrelic query "SELECT count(*) FROM Transaction" -j
 pub const CMD_EKS_LIST: &str = r#"List pods in the EKS cluster.
 
 ```bash
-hu eks list               # List all pods
-hu eks list -n namespace  # Filter by namespace
-hu eks list -j            # JSON output
+hu eks list                       # List all pods
+hu eks list -n namespace          # Filter by namespace
+hu eks list -A                    # All namespaces
+hu eks list --json                # JSON output
 ```
 "#;
 
 pub const CMD_EKS_EXEC: &str = r#"Execute a command in a pod (interactive shell by default).
 
 ```bash
-hu eks exec <pod>                    # Open shell
-hu eks exec <pod> -- ls -la          # Run command
-hu eks exec <pod> -n namespace       # Specify namespace
+hu eks exec my-pod                  # Open shell
+hu eks exec my-pod -- ls -la        # Run command
+hu eks exec my-pod -n namespace     # Specify namespace
+hu eks exec my-pod -c container     # Specify container
 ```
 "#;
 
 pub const CMD_EKS_LOGS: &str = r#"Tail logs from a pod.
 
 ```bash
-hu eks logs <pod>                    # Tail logs
-hu eks logs <pod> -f                 # Follow logs
-hu eks logs <pod> -n namespace       # Specify namespace
-hu eks logs <pod> --since 1h         # Logs from last hour
+hu eks logs my-pod                  # Tail logs
+hu eks logs my-pod -f               # Follow logs
+hu eks logs my-pod -n namespace     # Specify namespace
+hu eks logs my-pod --tail 100       # Last 100 lines
+hu eks logs my-pod --previous       # Previous container
 ```
 "#;
 
@@ -573,24 +584,27 @@ hu eks logs <pod> --since 1h         # Logs from last hour
 pub const CMD_PIPELINE_LIST: &str = r#"List all CodePipeline pipelines.
 
 ```bash
-hu pipeline list          # List pipelines
-hu pipeline list -j       # JSON output
+hu pipeline list                    # List pipelines
+hu pipeline list -r us-west-2       # Specify region
+hu pipeline list --json             # JSON output
 ```
 "#;
 
 pub const CMD_PIPELINE_STATUS: &str = r#"Show pipeline status (stages and actions).
 
 ```bash
-hu pipeline status <pipeline-name>
-hu pipeline status <pipeline-name> -j  # JSON output
+hu pipeline status my-pipeline
+hu pipeline status my-pipeline -r us-west-2  # Specify region
+hu pipeline status my-pipeline --json        # JSON output
 ```
 "#;
 
 pub const CMD_PIPELINE_HISTORY: &str = r#"Show pipeline execution history.
 
 ```bash
-hu pipeline history <pipeline-name>
-hu pipeline history <pipeline-name> -n 10  # Last 10 executions
+hu pipeline history my-pipeline
+hu pipeline history my-pipeline -l 10       # Last 10 executions
+hu pipeline history my-pipeline --json      # JSON output
 ```
 "#;
 
@@ -601,29 +615,36 @@ hu pipeline history <pipeline-name> -n 10  # Last 10 executions
 pub const CMD_UTILS_FETCH_HTML: &str = r#"Fetch URL and convert to markdown.
 
 ```bash
-hu utils fetch-html <url>              # Fetch and convert
-hu utils fetch-html <url> -c           # Extra cleaning
-hu utils fetch-html <url> -s "article" # Target CSS selector
-hu utils fetch-html <url> -o out.md    # Write to file
+hu utils fetch-html https://example.com             # Fetch and convert
+hu utils fetch-html https://example.com -c          # Extract main content
+hu utils fetch-html https://example.com -s          # Summary mode
+hu utils fetch-html https://example.com -H          # Headings only
+hu utils fetch-html https://example.com -l          # Links only
+hu utils fetch-html https://example.com --selector "article"  # CSS selector
+hu utils fetch-html https://example.com -o out.md   # Write to file
 ```
 "#;
 
 pub const CMD_UTILS_GREP: &str = r#"Smart grep with token-saving options.
 
 ```bash
-hu utils grep "pattern" path/          # Search in path
-hu utils grep "pattern" -g "*.rs"      # Filter by glob
-hu utils grep "pattern" --refs         # File paths only
-hu utils grep "pattern" -n 20          # Limit results
+hu utils grep "pattern" path/         # Search in path
+hu utils grep "pattern" -g "*.rs"     # Filter by glob
+hu utils grep "pattern" --refs        # File:line references only
+hu utils grep "pattern" --unique      # Deduplicate similar matches
+hu utils grep "pattern" --ranked      # Sort by relevance
+hu utils grep "pattern" --signature   # Function signatures only
+hu utils grep "pattern" -n 20         # Limit results
 ```
 "#;
 
 pub const CMD_UTILS_WEB_SEARCH: &str = r#"Web search using Brave Search API.
 
 ```bash
-hu utils web-search "query"            # Search web
-hu utils web-search "query" -n 10      # Limit results
-hu utils web-search "query" -j         # JSON output
+hu utils web-search "query"           # Search and fetch content
+hu utils web-search "query" -n 5      # Fetch from top N results
+hu utils web-search "query" -l        # List results only (no fetch)
+hu utils web-search "query" -o out.md # Write to file
 ```
 "#;
 
@@ -658,82 +679,90 @@ hu utils docs-section README.md "Installation"
 pub const CMD_DATA_SYNC: &str = r#"Sync Claude Code data to local database.
 
 ```bash
-hu data sync              # Incremental sync
-hu data sync -f           # Force full sync
+hu data sync                          # Incremental sync
+hu data sync -f                       # Force full sync
+hu data sync -q                       # Quiet output
 ```
 "#;
 
 pub const CMD_DATA_CONFIG: &str = r#"Show data configuration.
 
 ```bash
-hu data config            # Show config
-hu data config -j         # JSON output
+hu data config                        # Show config
+hu data config --json                 # JSON output
 ```
 "#;
 
 pub const CMD_DATA_STATS: &str = r#"Usage statistics.
 
 ```bash
-hu data stats             # Show stats
-hu data stats -j          # JSON output
+hu data stats                         # Show stats
+hu data stats -t                      # Today only
+hu data stats --json                  # JSON output
 ```
 "#;
 
 pub const CMD_DATA_SEARCH: &str = r#"Search messages.
 
 ```bash
-hu data search "query"    # Search messages
-hu data search "error" -n 20  # Limit results
+hu data search "query"                # Search messages
+hu data search "error" -n 20          # Limit results
+hu data search "query" --json         # JSON output
 ```
 "#;
 
 pub const CMD_DATA_TODOS: &str = r#"Todo operations.
 
 ```bash
-hu data todos pending     # Show pending todos
-hu data todos all         # Show all todos
-hu data todos -j          # JSON output
+hu data todos list                    # List all todos
+hu data todos pending                 # Show pending todos
 ```
 "#;
 
 pub const CMD_DATA_TOOLS: &str = r#"Tool usage statistics.
 
 ```bash
-hu data tools             # Show tool usage
-hu data tools -j          # JSON output
+hu data tools                         # Show tool usage
+hu data tools -t Read                 # Detail for specific tool
+hu data tools --json                  # JSON output
 ```
 "#;
 
 pub const CMD_DATA_ERRORS: &str = r#"Extract errors from debug logs.
 
 ```bash
-hu data errors            # Show recent errors
-hu data errors -n 50      # Last 50 errors
+hu data errors                        # Show recent errors
+hu data errors -r 14                  # Last 14 days
+hu data errors --json                 # JSON output
 ```
 "#;
 
 pub const CMD_DATA_PRICING: &str = r#"Pricing analysis.
 
 ```bash
-hu data pricing           # Show pricing analysis
-hu data pricing -j        # JSON output
+hu data pricing                       # Show pricing analysis
+hu data pricing -s max20x             # Subscription tier
+hu data pricing -b 6                  # Billing day of month
+hu data pricing --json                # JSON output
 ```
 "#;
 
 pub const CMD_DATA_SESSION: &str = r#"Session operations.
 
 ```bash
-hu data session list      # List sessions
-hu data session list -p . # Filter by project
-hu data session show <id> # Show session details
+hu data session list                  # List sessions
+hu data session read SESSION_ID       # Read session messages
+hu data session current               # Show current session
 ```
 "#;
 
 pub const CMD_DATA_BRANCHES: &str = r#"Branch activity statistics.
 
 ```bash
-hu data branches          # Show branch stats
-hu data branches -j       # JSON output
+hu data branches                      # Show branch stats
+hu data branches -b feature-branch    # Filter by branch
+hu data branches -l 50                # Limit results
+hu data branches --json               # JSON output
 ```
 "#;
 

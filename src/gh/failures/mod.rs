@@ -8,6 +8,7 @@ use super::helpers::{get_current_repo, is_test_job, parse_owner_repo};
 mod tests;
 
 /// Handle the `hu gh failures` command
+#[cfg(not(tarpaulin_include))]
 pub async fn run(args: FailuresArgs) -> Result<()> {
     let client = GithubClient::new()?;
 
@@ -18,18 +19,16 @@ pub async fn run(args: FailuresArgs) -> Result<()> {
         get_current_repo()?
     };
 
-    // Determine which PR to check
-    let pr_number = if let Some(pr) = args.pr {
-        pr
+    // If PR specified, use PR-based flow; otherwise get latest repo failures
+    if let Some(pr_number) = args.pr {
+        process_pr_failures(&client, &owner, &repo, pr_number).await
     } else {
-        get_current_branch_pr(&client, &owner, &repo).await?
-    };
-
-    process_failures(&client, &owner, &repo, pr_number).await
+        process_repo_failures(&client, &owner, &repo).await
+    }
 }
 
-/// Process failures using the given API client (testable)
-pub async fn process_failures(
+/// Process failures for a specific PR (testable)
+pub async fn process_pr_failures(
     client: &impl GithubApi,
     owner: &str,
     repo: &str,
@@ -56,6 +55,34 @@ pub async fn process_failures(
         }
     };
 
+    process_run_failures(client, owner, repo, run_id).await
+}
+
+/// Process failures for the latest failed run in the repo (testable)
+pub async fn process_repo_failures(client: &impl GithubApi, owner: &str, repo: &str) -> Result<()> {
+    eprintln!("Fetching latest failures in {}/{}...", owner, repo);
+
+    // Get the latest failed workflow run for the repo
+    let run_id = client.get_latest_failed_run(owner, repo).await?;
+
+    let run_id = match run_id {
+        Some(id) => id,
+        None => {
+            println!("No failed workflow runs found in {}/{}.", owner, repo);
+            return Ok(());
+        }
+    };
+
+    process_run_failures(client, owner, repo, run_id).await
+}
+
+/// Process failures for a specific workflow run (shared logic)
+async fn process_run_failures(
+    client: &impl GithubApi,
+    owner: &str,
+    repo: &str,
+    run_id: u64,
+) -> Result<()> {
     // Get failed jobs in that run
     let failed_jobs = client.get_failed_jobs(owner, repo, run_id).await?;
 
@@ -114,17 +141,4 @@ pub async fn process_failures(
     println!("```");
 
     Ok(())
-}
-
-/// Get PR number for current branch using octocrab
-async fn get_current_branch_pr(client: &impl GithubApi, owner: &str, repo: &str) -> Result<u64> {
-    let branch = super::helpers::get_current_branch()?;
-
-    match client.find_pr_for_branch(owner, repo, &branch).await? {
-        Some(pr) => Ok(pr),
-        None => anyhow::bail!(
-            "No PR found for branch '{}'. Use --pr to specify a PR number.",
-            branch
-        ),
-    }
 }

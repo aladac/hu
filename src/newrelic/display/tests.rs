@@ -108,7 +108,7 @@ fn test_format_json_value_string() {
 #[test]
 fn test_format_json_value_number() {
     assert_eq!(format_json_value(&serde_json::json!(42)), "42");
-    assert_eq!(format_json_value(&serde_json::json!(3.14)), "3.14");
+    assert_eq!(format_json_value(&serde_json::json!(1.234)), "1.234");
 }
 
 #[test]

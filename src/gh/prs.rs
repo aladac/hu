@@ -269,6 +269,10 @@ mod tests {
             Ok(None)
         }
 
+        async fn get_latest_failed_run(&self, _owner: &str, _repo: &str) -> Result<Option<u64>> {
+            Ok(None)
+        }
+
         async fn get_failed_jobs(
             &self,
             _owner: &str,
