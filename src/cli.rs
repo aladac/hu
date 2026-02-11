@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::context::ContextCommand;
+use crate::cron::CronCommand;
 use crate::data::DataCommand;
 use crate::docs::DocsCommand;
 use crate::eks::EksCommand;
@@ -107,5 +108,11 @@ pub enum Command {
     Docs {
         #[command(subcommand)]
         cmd: Option<DocsCommand>,
+    },
+
+    /// Cron job management (add, list, remove)
+    Cron {
+        #[command(subcommand)]
+        cmd: Option<CronCommand>,
     },
 }

@@ -2,6 +2,7 @@ use clap::{CommandFactory, Parser};
 
 mod cli;
 mod context;
+mod cron;
 mod data;
 mod docs;
 mod eks;
@@ -116,6 +117,12 @@ async fn run_command(cmd: Command) -> anyhow::Result<()> {
         }
         Command::Docs { cmd: None } => {
             print_subcommand_help("docs")?;
+        }
+        Command::Cron { cmd: Some(cmd) } => {
+            return cron::run_command(cmd);
+        }
+        Command::Cron { cmd: None } => {
+            print_subcommand_help("cron")?;
         }
     }
     Ok(())
