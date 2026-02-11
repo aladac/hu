@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect x="25" y="25" width="462" height="462" rx="40" ry="40"
+        fill="none" stroke="#ff0000" stroke-width="10"/>
+  <text x="256" y="330"
+        font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-weight="bold"
+        font-size="300"
+        fill="#ff0000"
+        text-anchor="middle">hU</text>
+</svg>

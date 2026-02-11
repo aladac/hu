@@ -1,5 +1,7 @@
 # hu
 
+<img src="logo.png" alt="hu logo" width="80" align="right">
+
 [![Crates.io](https://img.shields.io/crates/v/hu.svg)](https://crates.io/crates/hu)
 [![Downloads](https://img.shields.io/crates/d/hu.svg)](https://crates.io/crates/hu)
 [![CI](https://github.com/aladac/hu/actions/workflows/test.yml/badge.svg)](https://github.com/aladac/hu/actions/workflows/test.yml)
@@ -17,7 +19,7 @@ hu solves this by:
 3. **Pre-tool hooks** - Automatically warn about wasteful operations
 4. **Unified integrations** - Single CLI for Jira, GitHub, Slack, PagerDuty, Sentry, NewRelic, and AWS
 
-See **[SAVINGS.md](SAVINGS.md)** for detailed token usage comparisons.
+See **[doc/savings.md](doc/savings.md)** for detailed token usage comparisons.
 
 ## Install
 
@@ -46,9 +48,9 @@ hu utils fetch-html https://docs.rs -c
 
 | Document | Description |
 |----------|-------------|
-| **[CLI.md](CLI.md)** | Complete CLI reference with all flags and options |
-| **[COMMANDS.md](COMMANDS.md)** | Slash command reference (`/hu:*` commands) |
-| **[SAVINGS.md](SAVINGS.md)** | Token usage analysis and optimization guide |
+| **[doc/cli.md](doc/cli.md)** | Complete CLI reference with all flags and options |
+| **[doc/commands.md](doc/commands.md)** | Slash command reference (`/hu:*` commands) |
+| **[doc/savings.md](doc/savings.md)** | Token usage analysis and optimization guide |
 
 ## Commands Overview
 
