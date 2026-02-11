@@ -1,6 +1,4 @@
-# hu
-
-<img src="logo.png" alt="hu logo" width="80" align="right">
+# <img src="logo.png" alt="hu logo" width="32" style="vertical-align: middle"> hu
 
 [![Crates.io](https://img.shields.io/crates/v/hu.svg)](https://crates.io/crates/hu)
 [![Downloads](https://img.shields.io/crates/d/hu.svg)](https://crates.io/crates/hu)
