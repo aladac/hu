@@ -1,4 +1,4 @@
-[![hu](logo.png)](https://crates.io/crates/hu)
+[![hu](https://raw.githubusercontent.com/saiden-dev/hu/master/logo.png)](https://crates.io/crates/hu)
 
 [![Crates.io](https://img.shields.io/crates/v/hu.svg)](https://crates.io/crates/hu)
 [![Downloads](https://img.shields.io/crates/d/hu.svg)](https://crates.io/crates/hu)
