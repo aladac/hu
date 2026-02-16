@@ -15,6 +15,8 @@ pub fn run(args: LsArgs) -> Result<()> {
         display::format_json(&entries)
     } else if args.long {
         display::format_long(&entries)
+    } else if args.one_per_line {
+        display::format_single_column(&entries)
     } else {
         display::format_simple(&entries)
     };
@@ -39,6 +41,7 @@ mod tests {
             path: Some(dir.path().to_path_buf()),
             all: false,
             long: false,
+            one_per_line: false,
             json: false,
         };
         assert!(run(args).is_ok());
@@ -54,6 +57,7 @@ mod tests {
             path: Some(dir.path().to_path_buf()),
             all: false,
             long: false,
+            one_per_line: false,
             json: false,
         };
         assert!(run(args).is_ok());
@@ -68,6 +72,23 @@ mod tests {
             path: Some(dir.path().to_path_buf()),
             all: false,
             long: true,
+            one_per_line: false,
+            json: false,
+        };
+        assert!(run(args).is_ok());
+    }
+
+    #[test]
+    fn run_one_per_line_format() {
+        let dir = TempDir::new().unwrap();
+        File::create(dir.path().join("file1.txt")).unwrap();
+        File::create(dir.path().join("file2.txt")).unwrap();
+
+        let args = LsArgs {
+            path: Some(dir.path().to_path_buf()),
+            all: false,
+            long: false,
+            one_per_line: true,
             json: false,
         };
         assert!(run(args).is_ok());
@@ -82,6 +103,7 @@ mod tests {
             path: Some(dir.path().to_path_buf()),
             all: false,
             long: false,
+            one_per_line: false,
             json: true,
         };
         assert!(run(args).is_ok());
@@ -96,6 +118,7 @@ mod tests {
             path: Some(dir.path().to_path_buf()),
             all: true,
             long: false,
+            one_per_line: false,
             json: false,
         };
         assert!(run(args).is_ok());
@@ -107,6 +130,7 @@ mod tests {
             path: Some(PathBuf::from("/nonexistent/path/12345")),
             all: false,
             long: false,
+            one_per_line: false,
             json: false,
         };
         assert!(run(args).is_err());

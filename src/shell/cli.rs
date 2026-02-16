@@ -22,6 +22,10 @@ pub struct LsArgs {
     #[arg(short = 'l', long)]
     pub long: bool,
 
+    /// List one file per line
+    #[arg(short = '1')]
+    pub one_per_line: bool,
+
     /// Output as JSON
     #[arg(short, long)]
     pub json: bool,
@@ -53,7 +57,19 @@ mod tests {
                 assert!(args.path.is_none());
                 assert!(!args.all);
                 assert!(!args.long);
+                assert!(!args.one_per_line);
                 assert!(!args.json);
+            }
+            _ => panic!("Expected Ls command"),
+        }
+    }
+
+    #[test]
+    fn parse_ls_one_per_line() {
+        let cli = TestCli::try_parse_from(["test", "ls", "-1"]).unwrap();
+        match cli.cmd {
+            ShellCommand::Ls(args) => {
+                assert!(args.one_per_line);
             }
             _ => panic!("Expected Ls command"),
         }

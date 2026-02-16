@@ -21,6 +21,18 @@ pub fn format_simple(entries: &[FileEntry]) -> String {
         .join("  ")
 }
 
+pub fn format_single_column(entries: &[FileEntry]) -> String {
+    if entries.is_empty() {
+        return String::new();
+    }
+
+    entries
+        .iter()
+        .map(colorize_name)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn format_long(entries: &[FileEntry]) -> String {
     if entries.is_empty() {
         return String::new();
@@ -149,6 +161,33 @@ mod tests {
         assert!(output.contains("dir"));
         assert!(output.contains("file.rs"));
         assert!(output.contains("  ")); // separator
+    }
+
+    #[test]
+    fn format_single_column_empty() {
+        let entries: Vec<FileEntry> = vec![];
+        assert_eq!(format_single_column(&entries), "");
+    }
+
+    #[test]
+    fn format_single_column_single_file() {
+        let entries = vec![make_entry("file.txt", FileKind::File, 100)];
+        let output = format_single_column(&entries);
+        assert!(output.contains("file.txt"));
+        assert!(!output.contains('\n'));
+    }
+
+    #[test]
+    fn format_single_column_multiple() {
+        let entries = vec![
+            make_entry("dir", FileKind::Directory, 0),
+            make_entry("file.rs", FileKind::File, 100),
+        ];
+        let output = format_single_column(&entries);
+        assert!(output.contains("dir"));
+        assert!(output.contains("file.rs"));
+        assert!(output.contains('\n')); // newline separator
+        assert!(!output.contains("  ")); // no double-space separator
     }
 
     #[test]
