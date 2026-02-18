@@ -1,9 +1,8 @@
 use clap::{Args, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub enum ShellCommand {
-    /// List directory contents with icons
+    /// List directory contents (GNU ls passthrough with icons)
     Ls(LsArgs),
     /// Show disk filesystem usage
     Df(DfArgs),
@@ -11,24 +10,9 @@ pub enum ShellCommand {
 
 #[derive(Debug, Args)]
 pub struct LsArgs {
-    /// Directory to list (default: current directory)
-    pub path: Option<PathBuf>,
-
-    /// Show hidden files (starting with .)
-    #[arg(short = 'a', long)]
-    pub all: bool,
-
-    /// Use long listing format
-    #[arg(short = 'l', long)]
-    pub long: bool,
-
-    /// List one file per line
-    #[arg(short = '1')]
-    pub one_per_line: bool,
-
-    /// Output as JSON
-    #[arg(short, long)]
-    pub json: bool,
+    /// Arguments passed through to GNU ls
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -50,26 +34,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_ls_default() {
+    fn parse_ls_no_args() {
         let cli = TestCli::try_parse_from(["test", "ls"]).unwrap();
         match cli.cmd {
             ShellCommand::Ls(args) => {
-                assert!(args.path.is_none());
-                assert!(!args.all);
-                assert!(!args.long);
-                assert!(!args.one_per_line);
-                assert!(!args.json);
+                assert!(args.args.is_empty());
             }
             _ => panic!("Expected Ls command"),
         }
     }
 
     #[test]
-    fn parse_ls_one_per_line() {
-        let cli = TestCli::try_parse_from(["test", "ls", "-1"]).unwrap();
+    fn parse_ls_with_flags() {
+        let cli = TestCli::try_parse_from(["test", "ls", "-la"]).unwrap();
         match cli.cmd {
             ShellCommand::Ls(args) => {
-                assert!(args.one_per_line);
+                assert_eq!(args.args, vec!["-la"]);
             }
             _ => panic!("Expected Ls command"),
         }
@@ -80,53 +60,29 @@ mod tests {
         let cli = TestCli::try_parse_from(["test", "ls", "/tmp"]).unwrap();
         match cli.cmd {
             ShellCommand::Ls(args) => {
-                assert_eq!(args.path, Some(PathBuf::from("/tmp")));
+                assert_eq!(args.args, vec!["/tmp"]);
             }
             _ => panic!("Expected Ls command"),
         }
     }
 
     #[test]
-    fn parse_ls_all() {
-        let cli = TestCli::try_parse_from(["test", "ls", "-a"]).unwrap();
+    fn parse_ls_mixed_args() {
+        let cli = TestCli::try_parse_from(["test", "ls", "-la", "--color=never", "/home"]).unwrap();
         match cli.cmd {
             ShellCommand::Ls(args) => {
-                assert!(args.all);
+                assert_eq!(args.args, vec!["-la", "--color=never", "/home"]);
             }
             _ => panic!("Expected Ls command"),
         }
     }
 
     #[test]
-    fn parse_ls_long() {
-        let cli = TestCli::try_parse_from(["test", "ls", "-l"]).unwrap();
+    fn parse_ls_long_flags() {
+        let cli = TestCli::try_parse_from(["test", "ls", "--all", "--sort=size"]).unwrap();
         match cli.cmd {
             ShellCommand::Ls(args) => {
-                assert!(args.long);
-            }
-            _ => panic!("Expected Ls command"),
-        }
-    }
-
-    #[test]
-    fn parse_ls_combined() {
-        let cli = TestCli::try_parse_from(["test", "ls", "-la", "/home"]).unwrap();
-        match cli.cmd {
-            ShellCommand::Ls(args) => {
-                assert!(args.all);
-                assert!(args.long);
-                assert_eq!(args.path, Some(PathBuf::from("/home")));
-            }
-            _ => panic!("Expected Ls command"),
-        }
-    }
-
-    #[test]
-    fn parse_ls_json() {
-        let cli = TestCli::try_parse_from(["test", "ls", "--json"]).unwrap();
-        match cli.cmd {
-            ShellCommand::Ls(args) => {
-                assert!(args.json);
+                assert_eq!(args.args, vec!["--all", "--sort=size"]);
             }
             _ => panic!("Expected Ls command"),
         }

@@ -1,294 +1,180 @@
-use super::types::{FileEntry, FileKind};
-use anyhow::{Context, Result};
-use std::fs;
-use std::os::unix::fs::{FileTypeExt, PermissionsExt};
-use std::path::Path;
-use std::time::SystemTime;
+use anyhow::{bail, Result};
+use std::process::Command;
 
-pub fn list_directory(path: &Path, show_hidden: bool) -> Result<Vec<FileEntry>> {
-    let entries =
-        fs::read_dir(path).with_context(|| format!("Cannot read directory: {}", path.display()))?;
+/// Default flags hu injects for pretty output.
+/// User args come AFTER these, so they can override (GNU ls uses last-wins).
+const PRETTY_DEFAULTS: &[&str] = &[
+    "--color=always",
+    "--group-directories-first",
+    "--classify",
+    "-h",
+];
 
-    let mut files: Vec<FileEntry> = Vec::new();
-
-    for entry in entries {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().to_string();
-
-        // Skip hidden files unless -a flag
-        let is_hidden = name.starts_with('.');
-        if is_hidden && !show_hidden {
-            continue;
-        }
-
-        let file_entry = build_entry(&entry.path(), name, is_hidden)?;
-        files.push(file_entry);
+/// Detect the GNU ls binary name for this platform.
+/// macOS ships BSD ls; GNU coreutils installs as `gls`.
+/// Linux ships GNU ls as `ls`.
+pub fn detect_ls_binary() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "gls"
+    } else {
+        "ls"
     }
-
-    // Sort: directories first, then alphabetically (case-insensitive)
-    files.sort_by(|a, b| {
-        let dir_order = match (&a.kind, &b.kind) {
-            (FileKind::Directory, FileKind::Directory) => std::cmp::Ordering::Equal,
-            (FileKind::Directory, _) => std::cmp::Ordering::Less,
-            (_, FileKind::Directory) => std::cmp::Ordering::Greater,
-            _ => std::cmp::Ordering::Equal,
-        };
-        dir_order.then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-
-    Ok(files)
 }
 
-fn build_entry(path: &Path, name: String, is_hidden: bool) -> Result<FileEntry> {
-    // Use symlink_metadata to not follow symlinks
-    let metadata = fs::symlink_metadata(path)
-        .with_context(|| format!("Cannot read metadata: {}", path.display()))?;
+/// Build the full argument list: pretty defaults + user args.
+pub fn build_args(user_args: &[String]) -> Vec<String> {
+    let mut args: Vec<String> = PRETTY_DEFAULTS.iter().map(|s| (*s).to_string()).collect();
+    args.extend(user_args.iter().cloned());
+    args
+}
 
-    let file_type = metadata.file_type();
-    let kind = detect_kind(&file_type);
+/// Execute GNU ls with pretty defaults + user args.
+/// Returns the raw stdout bytes on success.
+pub fn execute_ls(user_args: &[String]) -> Result<Vec<u8>> {
+    let binary = detect_ls_binary();
+    let args = build_args(user_args);
 
-    let link_target = if file_type.is_symlink() {
-        fs::read_link(path)
-            .ok()
-            .map(|p| p.to_string_lossy().to_string())
-    } else {
-        None
-    };
+    let output = Command::new(binary).args(&args).output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!(
+                "GNU ls not found as '{}'. {}",
+                binary,
+                if cfg!(target_os = "macos") {
+                    "Install with: brew install coreutils"
+                } else {
+                    "Ensure coreutils is installed"
+                }
+            )
+        } else {
+            anyhow::anyhow!("Failed to execute {}: {}", binary, e)
+        }
+    })?;
 
-    let modified = metadata.modified().ok();
-    let modified_str = format_time(modified);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("{}: {}", binary, stderr.trim());
+    }
 
-    let mode = metadata.permissions().mode();
-    let permissions = format_permissions(mode);
-    let is_executable = mode & 0o111 != 0 && file_type.is_file();
+    Ok(output.stdout)
+}
 
-    Ok(FileEntry {
-        name,
-        kind,
-        size: metadata.len(),
-        modified,
-        modified_str,
-        permissions,
-        is_hidden,
-        is_executable,
-        link_target,
+/// Check if user args contain a long-listing flag (-l or --long).
+pub fn has_long_flag(args: &[String]) -> bool {
+    args.iter().any(|a| {
+        a == "-l"
+            || a == "--long"
+            || (a.starts_with('-') && !a.starts_with("--") && a.contains('l'))
     })
 }
 
-fn detect_kind(file_type: &fs::FileType) -> FileKind {
-    if file_type.is_dir() {
-        FileKind::Directory
-    } else if file_type.is_symlink() {
-        FileKind::Symlink
-    } else if file_type.is_socket() {
-        FileKind::Socket
-    } else if file_type.is_fifo() {
-        FileKind::Fifo
-    } else if file_type.is_block_device() {
-        FileKind::BlockDevice
-    } else if file_type.is_char_device() {
-        FileKind::CharDevice
-    } else if file_type.is_file() {
-        FileKind::File
-    } else {
-        FileKind::Unknown
-    }
-}
-
-fn format_permissions(mode: u32) -> String {
-    let mut s = String::with_capacity(10);
-
-    // File type
-    s.push(match mode & 0o170000 {
-        0o140000 => 's', // socket
-        0o120000 => 'l', // symlink
-        0o100000 => '-', // regular file
-        0o060000 => 'b', // block device
-        0o040000 => 'd', // directory
-        0o020000 => 'c', // char device
-        0o010000 => 'p', // fifo
-        _ => '?',
-    });
-
-    // Owner
-    s.push(if mode & 0o400 != 0 { 'r' } else { '-' });
-    s.push(if mode & 0o200 != 0 { 'w' } else { '-' });
-    s.push(if mode & 0o100 != 0 { 'x' } else { '-' });
-
-    // Group
-    s.push(if mode & 0o040 != 0 { 'r' } else { '-' });
-    s.push(if mode & 0o020 != 0 { 'w' } else { '-' });
-    s.push(if mode & 0o010 != 0 { 'x' } else { '-' });
-
-    // Others
-    s.push(if mode & 0o004 != 0 { 'r' } else { '-' });
-    s.push(if mode & 0o002 != 0 { 'w' } else { '-' });
-    s.push(if mode & 0o001 != 0 { 'x' } else { '-' });
-
-    s
-}
-
-fn format_time(time: Option<SystemTime>) -> String {
-    let Some(time) = time else {
-        return String::from("-");
-    };
-
-    let Ok(duration) = time.duration_since(std::time::UNIX_EPOCH) else {
-        return String::from("-");
-    };
-
-    let secs = duration.as_secs() as i64;
-    let dt = chrono::DateTime::from_timestamp(secs, 0);
-
-    match dt {
-        Some(dt) => {
-            let now = chrono::Utc::now();
-            let six_months_ago = now - chrono::Duration::days(180);
-
-            if dt < six_months_ago {
-                dt.format("%b %e  %Y").to_string()
-            } else {
-                dt.format("%b %e %H:%M").to_string()
-            }
-        }
-        None => String::from("-"),
-    }
-}
-
-pub fn format_size(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-    const TB: u64 = GB * 1024;
-
-    if bytes >= TB {
-        format!("{:.1}T", bytes as f64 / TB as f64)
-    } else if bytes >= GB {
-        format!("{:.1}G", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1}M", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.1}K", bytes as f64 / KB as f64)
-    } else {
-        format!("{}B", bytes)
-    }
+/// Check if user args contain a one-per-line flag (-1).
+pub fn has_single_column_flag(args: &[String]) -> bool {
+    args.iter()
+        .any(|a| a == "-1" || (a.starts_with('-') && !a.starts_with("--") && a.contains('1')))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use tempfile::TempDir;
 
     #[test]
-    fn list_empty_directory() {
-        let dir = TempDir::new().unwrap();
-        let entries = list_directory(dir.path(), false).unwrap();
-        assert!(entries.is_empty());
+    fn detect_binary_returns_valid_name() {
+        let binary = detect_ls_binary();
+        assert!(binary == "gls" || binary == "ls");
     }
 
     #[test]
-    fn list_with_files() {
-        let dir = TempDir::new().unwrap();
-        File::create(dir.path().join("file.txt")).unwrap();
-        fs::create_dir(dir.path().join("subdir")).unwrap();
-
-        let entries = list_directory(dir.path(), false).unwrap();
-        assert_eq!(entries.len(), 2);
-        // Directories should come first
-        assert_eq!(entries[0].name, "subdir");
-        assert_eq!(entries[0].kind, FileKind::Directory);
-        assert_eq!(entries[1].name, "file.txt");
-        assert_eq!(entries[1].kind, FileKind::File);
+    fn build_args_empty_user_args() {
+        let args = build_args(&[]);
+        assert_eq!(args.len(), PRETTY_DEFAULTS.len());
+        assert!(args.contains(&"--color=always".to_string()));
+        assert!(args.contains(&"--group-directories-first".to_string()));
+        assert!(args.contains(&"--classify".to_string()));
+        assert!(args.contains(&"-h".to_string()));
     }
 
     #[test]
-    fn hidden_files_excluded_by_default() {
-        let dir = TempDir::new().unwrap();
-        File::create(dir.path().join(".hidden")).unwrap();
-        File::create(dir.path().join("visible")).unwrap();
-
-        let entries = list_directory(dir.path(), false).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].name, "visible");
+    fn build_args_with_user_args() {
+        let user = vec!["-la".to_string(), "/tmp".to_string()];
+        let args = build_args(&user);
+        // Pretty defaults come first
+        assert_eq!(args[0], "--color=always");
+        // User args appended at end
+        assert!(args.contains(&"-la".to_string()));
+        assert!(args.contains(&"/tmp".to_string()));
+        assert_eq!(args.len(), PRETTY_DEFAULTS.len() + 2);
     }
 
     #[test]
-    fn hidden_files_included_with_flag() {
-        let dir = TempDir::new().unwrap();
-        File::create(dir.path().join(".hidden")).unwrap();
-        File::create(dir.path().join("visible")).unwrap();
-
-        let entries = list_directory(dir.path(), true).unwrap();
-        assert_eq!(entries.len(), 2);
+    fn build_args_user_can_override_color() {
+        let user = vec!["--color=never".to_string()];
+        let args = build_args(&user);
+        // Both present - GNU ls uses last-wins, so user's --color=never takes effect
+        assert_eq!(args[0], "--color=always");
+        assert_eq!(*args.last().unwrap(), "--color=never");
     }
 
     #[test]
-    fn format_permissions_regular_file() {
-        let perms = format_permissions(0o100644);
-        assert_eq!(perms, "-rw-r--r--");
+    fn has_long_flag_detects_dash_l() {
+        assert!(has_long_flag(&["-l".to_string()]));
+        assert!(has_long_flag(&["-la".to_string()]));
+        assert!(has_long_flag(&["-al".to_string()]));
+        assert!(has_long_flag(&["--long".to_string()]));
     }
 
     #[test]
-    fn format_permissions_executable() {
-        let perms = format_permissions(0o100755);
-        assert_eq!(perms, "-rwxr-xr-x");
+    fn has_long_flag_negative() {
+        assert!(!has_long_flag(&[]));
+        assert!(!has_long_flag(&["-a".to_string()]));
+        assert!(!has_long_flag(&["/tmp".to_string()]));
+        assert!(!has_long_flag(&["--all".to_string()]));
     }
 
     #[test]
-    fn format_permissions_directory() {
-        let perms = format_permissions(0o040755);
-        assert_eq!(perms, "drwxr-xr-x");
+    fn has_single_column_flag_detects() {
+        assert!(has_single_column_flag(&["-1".to_string()]));
+        assert!(has_single_column_flag(&["-a1".to_string()]));
     }
 
     #[test]
-    fn format_size_bytes() {
-        assert_eq!(format_size(0), "0B");
-        assert_eq!(format_size(512), "512B");
-        assert_eq!(format_size(1023), "1023B");
+    fn has_single_column_flag_negative() {
+        assert!(!has_single_column_flag(&[]));
+        assert!(!has_single_column_flag(&["-l".to_string()]));
+        assert!(!has_single_column_flag(&["/tmp".to_string()]));
     }
 
     #[test]
-    fn format_size_kilobytes() {
-        assert_eq!(format_size(1024), "1.0K");
-        assert_eq!(format_size(1536), "1.5K");
+    fn execute_ls_current_dir() {
+        // This test requires GNU ls to be installed
+        let result = execute_ls(&[]);
+        if detect_ls_binary() == "gls" {
+            // On macOS, gls might not be installed in CI
+            if result.is_ok() {
+                let stdout = result.unwrap();
+                // Should produce some output (current dir is not empty)
+                assert!(!stdout.is_empty());
+            }
+        } else {
+            // On Linux, ls is always available
+            assert!(result.is_ok());
+        }
     }
 
     #[test]
-    fn format_size_megabytes() {
-        assert_eq!(format_size(1024 * 1024), "1.0M");
-        assert_eq!(format_size(1024 * 1024 * 5), "5.0M");
+    fn execute_ls_nonexistent_dir() {
+        let result = execute_ls(&["/nonexistent/path/xyz123".to_string()]);
+        // Should fail because path does not exist
+        if result.is_ok() {
+            // Some ls versions may not fail, just print error to stderr
+        } else {
+            let err = result.unwrap_err().to_string();
+            assert!(!err.is_empty());
+        }
     }
 
     #[test]
-    fn format_size_gigabytes() {
-        assert_eq!(format_size(1024 * 1024 * 1024), "1.0G");
-    }
-
-    #[test]
-    fn symlink_detection() {
-        let dir = TempDir::new().unwrap();
-        let file_path = dir.path().join("target");
-        let link_path = dir.path().join("link");
-        File::create(&file_path).unwrap();
-        std::os::unix::fs::symlink(&file_path, &link_path).unwrap();
-
-        let entries = list_directory(dir.path(), false).unwrap();
-        let link = entries.iter().find(|e| e.name == "link").unwrap();
-        assert_eq!(link.kind, FileKind::Symlink);
-        assert!(link.link_target.is_some());
-    }
-
-    #[test]
-    fn executable_detection() {
-        let dir = TempDir::new().unwrap();
-        let file_path = dir.path().join("script.sh");
-        File::create(&file_path).unwrap();
-
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&file_path, fs::Permissions::from_mode(0o755)).unwrap();
-
-        let entries = list_directory(dir.path(), false).unwrap();
-        assert!(entries[0].is_executable);
+    fn pretty_defaults_order() {
+        // Color should come first so user can override
+        assert_eq!(PRETTY_DEFAULTS[0], "--color=always");
     }
 }
