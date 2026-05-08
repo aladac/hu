@@ -9,6 +9,7 @@ mod bootstrap;
 mod cli;
 mod config;
 mod display;
+mod dotfiles;
 mod os;
 mod packages;
 mod pkgs;
