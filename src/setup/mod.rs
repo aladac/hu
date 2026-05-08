@@ -13,6 +13,7 @@ mod dotfiles;
 mod os;
 mod packages;
 mod pkgs;
+mod post;
 mod run;
 mod ssh;
 mod status;

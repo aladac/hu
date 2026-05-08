@@ -16,7 +16,7 @@ use crate::setup::config::SetupConfig;
 use crate::setup::display::StatusRow;
 use crate::setup::os::Os;
 use crate::setup::ssh::OpClient;
-use crate::setup::{dotfiles, pkgs, ssh};
+use crate::setup::{dotfiles, pkgs, post, ssh};
 use crate::util::shell::Shell;
 
 /// Resolve the active host name for `[host.<hostname>]` overrides.
@@ -123,6 +123,13 @@ pub async fn run_full<S: Shell + ?Sized, O: OpClient + ?Sized>(
             let ssh_rows = ssh::run(op, &config.ssh).await;
             rows.extend(ssh_rows);
         }
+    }
+
+    // Phase 6: post-install checks (only when running everything, not under
+    // a single-phase --only filter, and not for dry-run).
+    if args.only.is_none() && !args.dry_run {
+        let post_rows = post::run(shell, config).await;
+        rows.extend(post_rows);
     }
 
     Ok(rows)
