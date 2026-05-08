@@ -11,6 +11,7 @@ mod config;
 mod display;
 mod os;
 mod packages;
+mod pkgs;
 mod status;
 mod types;
 
@@ -31,9 +32,7 @@ pub async fn run_command(cmd: SetupCommand) -> Result<()> {
         SetupCommand::Run(_) => {
             bail!("hu setup run: not yet implemented (Phase 5)");
         }
-        SetupCommand::Pkgs(_) => {
-            bail!("hu setup pkgs: not yet implemented (Phase 1)");
-        }
+        SetupCommand::Pkgs(args) => run_pkgs(args).await,
         SetupCommand::Dotfiles => {
             bail!("hu setup dotfiles: not yet implemented (Phase 3)");
         }
@@ -81,6 +80,24 @@ async fn run_status() -> Result<()> {
     println!("{} host: {}", "◆".cyan(), os.label());
     println!("{}", display::render(&rows));
     println!("{}", display::summary(&rows));
+    Ok(())
+}
+
+async fn run_pkgs(args: cli::PkgsArgs) -> Result<()> {
+    let os = Os::detect()?;
+    let cfg = config::load().context("load setup.toml")?;
+    let shell = RealShell;
+    println!("{} host: {}", "◆".cyan(), os.label());
+    if args.dry_run {
+        println!("{} dry-run — no changes will be made", "◐".yellow());
+    }
+    let rows = pkgs::run(&shell, &cfg, &args, &os).await?;
+    println!("{}", display::render(&rows));
+    println!("{}", display::summary(&rows));
+    let any_failed = rows.iter().any(|r| r.status == types::Status::Failed);
+    if any_failed {
+        bail!("one or more packages failed — see table above");
+    }
     Ok(())
 }
 

@@ -21,7 +21,7 @@ use crate::util::shell::Shell;
 ///
 /// Runs the upstream install script via `bash -c "$(curl …)"`. NONINTERACTIVE
 /// flag skips the press-RETURN prompt the script normally requires.
-const BREW_INSTALL: &str = "NONINTERACTIVE=1 /bin/bash -c \
+pub(crate) const BREW_INSTALL: &str = "NONINTERACTIVE=1 /bin/bash -c \
      \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"";
 
 /// Linuxbrew apt prereqs (per the official Homebrew on Linux requirements).
