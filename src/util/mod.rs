@@ -1,5 +1,6 @@
 mod config;
 mod output;
+pub mod shell;
 
 pub use config::{
     load_credentials, save_credentials, BraveCredentials, GithubCredentials, JiraCredentials,

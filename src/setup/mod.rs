@@ -6,6 +6,7 @@
 //! Each step follows the idempotency contract `check → skip-or-act → re-verify`.
 
 mod cli;
+mod os;
 mod types;
 
 pub use cli::SetupCommand;
