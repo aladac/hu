@@ -9,6 +9,7 @@ mod cli;
 mod config;
 mod display;
 mod os;
+mod packages;
 mod status;
 mod types;
 

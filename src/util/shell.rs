@@ -77,6 +77,7 @@ mod fake {
     /// not found) which mirrors real shell behaviour.
     pub struct FakeShell {
         responses: Mutex<HashMap<String, ShellOutput>>,
+        sequences: Mutex<HashMap<String, Vec<ShellOutput>>>,
         calls: Mutex<Vec<(String, Vec<String>)>>,
     }
 
@@ -84,6 +85,7 @@ mod fake {
         pub fn new() -> Self {
             Self {
                 responses: Mutex::new(HashMap::new()),
+                sequences: Mutex::new(HashMap::new()),
                 calls: Mutex::new(Vec::new()),
             }
         }
@@ -100,6 +102,29 @@ mod fake {
                     stderr: String::new(),
                 },
             );
+        }
+
+        /// Register an ordered sequence of responses for repeated calls to the
+        /// same `(cmd, args)`. Each call pops the next response; exhausted
+        /// sequences fall through to the steady-state `expect` value (or 127
+        /// if none registered).
+        ///
+        /// Useful for `check → install → check` flows where the second check
+        /// should observe the post-install state.
+        pub fn expect_sequence(&self, cmd: &str, args: &[&str], outcomes: &[(&str, i32)]) {
+            let key = Self::key(cmd, args);
+            let queue: Vec<ShellOutput> = outcomes
+                .iter()
+                .map(|(stdout, exit_code)| ShellOutput {
+                    status: ExitStatus::from_raw(*exit_code << 8),
+                    stdout: stdout.to_string(),
+                    stderr: String::new(),
+                })
+                .collect();
+            self.sequences
+                .lock()
+                .expect("fake shell mutex")
+                .insert(key, queue);
         }
 
         /// Recorded call log.
@@ -120,6 +145,17 @@ mod fake {
                 cmd.to_string(),
                 args.iter().map(|s| s.to_string()).collect(),
             ));
+            // Sequence queue takes priority over single-response map.
+            if let Some(queue) = self
+                .sequences
+                .lock()
+                .expect("fake shell mutex")
+                .get_mut(&key)
+            {
+                if !queue.is_empty() {
+                    return Ok(queue.remove(0));
+                }
+            }
             let map = self.responses.lock().expect("fake shell mutex");
             match map.get(&key) {
                 Some(out) => Ok(out.clone()),
