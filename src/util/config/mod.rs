@@ -67,12 +67,14 @@ pub fn load_credentials_from(path: &PathBuf) -> Result<Credentials> {
 }
 
 /// Save credentials to config dir
+#[allow(dead_code)]
 pub fn save_credentials(creds: &Credentials) -> Result<()> {
     let path = credentials_path()?;
     save_credentials_to(creds, &path)
 }
 
 /// Save credentials to a specific path (testable)
+#[allow(dead_code)]
 pub fn save_credentials_to(creds: &Credentials, path: &PathBuf) -> Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)
