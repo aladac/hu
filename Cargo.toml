@@ -3,7 +3,7 @@ name = "hu"
 version = "0.1.14"
 edition = "2021"
 rust-version = "1.80"
-description = "Dev workflow CLI for Claude Code integration - Jira, GitHub, Slack, PagerDuty, Sentry, NewRelic, AWS"
+description = "Dev workflow CLI for Claude Code integration - data, context, docs, shell, cron, MCP, setup"
 license = "BUSL-1.1"
 repository = "https://github.com/aladac/hu"
 homepage = "https://github.com/aladac/hu"
@@ -20,7 +20,6 @@ clap = { version = "4.5", features = ["derive", "color", "wrap_help", "env"] }
 anyhow = "1.0"
 directories = "5"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "io-std"] }
-octocrab = "0.44"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
@@ -30,11 +29,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 regex = "1"
 async-trait = "0.1"
 urlencoding = "2"
-oauth2 = "4.4"
-axum = "0.7"
-open = "5"
-base64 = "0.22"
-rand = "0.8"
 comfy-table = "7.2.2"
 hex = "0.4.3"
 dirs = "6.0.0"
@@ -59,7 +53,7 @@ codegen-units = 1
 [package.metadata.deb]
 maintainer = "Adam Ladachowski <chi@sazabi.pl>"
 copyright = "2025, Adam Ladachowski"
-extended-description = "Dev workflow CLI for Claude Code integration with Jira, GitHub, Slack, PagerDuty, Sentry, NewRelic, and AWS."
+extended-description = "Dev workflow CLI for Claude Code integration: data, context, docs, cron, shell, MCP server, NewRelic, and host setup."
 section = "utility"
 priority = "optional"
 assets = [

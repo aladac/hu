@@ -34,16 +34,16 @@ fn version_flag_shows_version() {
 
 #[test]
 fn subcommand_without_action_shows_help() {
-    // Test all subcommands show help when called without action
     let cases = [
-        ("jira", "Jira operations"),
-        ("gh", "GitHub operations"),
-        ("slack", "Slack operations"),
-        ("pagerduty", "PagerDuty"),
-        ("sentry", "Sentry"),
         ("newrelic", "NewRelic"),
-        ("eks", "EKS pod access"),
-        ("pipeline", "CodePipeline status"),
+        ("utils", "Utility"),
+        ("context", "context"),
+        ("data", "Claude"),
+        ("docs", "Documentation"),
+        ("cron", "Cron"),
+        ("shell", "Shell"),
+        ("mcp", "MCP"),
+        ("setup", "bootstrap"),
     ];
 
     for (cmd, expected) in cases {
@@ -52,8 +52,9 @@ fn subcommand_without_action_shows_help() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.contains(expected),
-            "{} help missing description",
-            cmd
+            "{} help missing expected text: {}",
+            cmd,
+            expected
         );
     }
 }
@@ -64,15 +65,8 @@ fn all_main_commands_in_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     let commands = [
-        "jira",
-        "gh",
-        "slack",
-        "pagerduty",
-        "sentry",
-        "newrelic",
-        "eks",
-        "pipeline",
-        "utils",
+        "newrelic", "utils", "context", "read", "data", "install", "docs", "cron", "shell",
+        "mcp", "setup",
     ];
     for cmd in commands {
         assert!(stdout.contains(cmd), "help missing command: {}", cmd);
@@ -81,14 +75,7 @@ fn all_main_commands_in_help() {
 
 #[test]
 fn command_aliases_work() {
-    // pd -> pagerduty (config doesn't need auth)
-    let output = hu()
-        .args(["pd", "config"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-
-    // nr -> newrelic (incidents may fail without auth, just check alias works)
+    // nr -> newrelic
     let output = hu()
         .args(["nr", "--help"])
         .output()
@@ -105,71 +92,7 @@ fn invalid_command_fails() {
     assert!(!output.status.success(), "expected non-zero exit code");
 }
 
-// Test all subcommand executions for coverage
-
-#[test]
-fn jira_tickets_runs() {
-    let output = hu()
-        .args(["jira", "tickets"])
-        .output()
-        .expect("failed to execute");
-    // May succeed (if authenticated) or fail (if not)
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
-
-#[test]
-fn gh_prs_runs() {
-    let output = hu()
-        .args(["gh", "prs"])
-        .output()
-        .expect("failed to execute");
-    // May succeed (if authenticated) or fail (if not)
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
-
-#[test]
-fn gh_login_help_shows_usage() {
-    let output = hu()
-        .args(["gh", "login", "--help"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Authenticate"));
-}
-
-#[test]
-fn slack_messages_runs() {
-    let output = hu()
-        .args(["slack", "messages"])
-        .output()
-        .expect("failed to execute");
-    // May succeed or fail depending on auth state
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
-
-#[test]
-fn pagerduty_config_runs() {
-    let output = hu()
-        .args(["pagerduty", "config"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-}
-
-#[test]
-fn sentry_issues_runs() {
-    let output = hu()
-        .args(["sentry", "issues"])
-        .output()
-        .expect("failed to execute");
-    // May succeed or fail depending on auth state
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
+// NewRelic
 
 #[test]
 fn newrelic_incidents_runs() {
@@ -177,88 +100,11 @@ fn newrelic_incidents_runs() {
         .args(["newrelic", "incidents"])
         .output()
         .expect("failed to execute");
-    // May succeed or fail depending on auth state
-    // Just verify the command runs without panic
+    // May succeed or fail depending on auth state — just verify no panic
     let _ = output.status;
 }
 
-#[test]
-fn eks_list_runs() {
-    let output = hu()
-        .args(["eks", "list"])
-        .output()
-        .expect("failed to execute");
-    // May succeed or fail depending on kubectl/k8s auth state
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
-
-#[test]
-fn pipeline_list_runs() {
-    let output = hu()
-        .args(["pipeline", "list"])
-        .output()
-        .expect("failed to execute");
-    // May succeed or fail depending on AWS auth state
-    // Just verify the command runs without panic
-    let _ = output.status;
-}
-
-// GitHub subcommand tests
-
-#[test]
-fn gh_help_shows_subcommands() {
-    let output = hu()
-        .args(["gh", "--help"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("login"));
-    assert!(stdout.contains("prs"));
-    assert!(stdout.contains("failures"));
-}
-
-#[test]
-fn gh_failures_help() {
-    let output = hu()
-        .args(["gh", "failures", "--help"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("--pr"));
-    assert!(stdout.contains("--repo"));
-}
-
-#[test]
-fn gh_fix_help() {
-    let output = hu()
-        .args(["gh", "fix", "--help"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("--pr"));
-    assert!(stdout.contains("--run"));
-    assert!(stdout.contains("--branch"));
-    assert!(stdout.contains("--json"));
-}
-
-#[test]
-fn gh_login_help_shows_optional_token() {
-    let output = hu()
-        .args(["gh", "login", "--help"])
-        .output()
-        .expect("failed to execute");
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Token is optional (uses gh CLI token if not provided)
-    assert!(stdout.contains("--token"));
-    assert!(stdout.contains("gh CLI") || stdout.contains("device flow"));
-}
-
-// Utils subcommand tests
+// Utils
 
 #[test]
 fn utils_shows_help() {

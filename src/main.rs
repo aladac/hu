@@ -5,20 +5,13 @@ mod context;
 mod cron;
 mod data;
 mod docs;
-mod eks;
-mod gh;
 mod git;
 mod install;
-mod jira;
 mod mcp;
 mod newrelic;
-mod pagerduty;
-mod pipeline;
 mod read;
-mod sentry;
 mod setup;
 mod shell;
-mod slack;
 mod util;
 mod utils;
 
@@ -40,53 +33,11 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_command(cmd: Command) -> anyhow::Result<()> {
     match cmd {
-        Command::Jira { cmd: Some(cmd) } => {
-            return jira::run_command(cmd).await;
-        }
-        Command::Jira { cmd: None } => {
-            print_subcommand_help("jira")?;
-        }
-        Command::Gh { cmd: Some(cmd) } => {
-            return gh::run_command(cmd).await;
-        }
-        Command::Gh { cmd: None } => {
-            print_subcommand_help("gh")?;
-        }
-        Command::Slack { cmd: Some(cmd) } => {
-            return slack::run(cmd).await;
-        }
-        Command::Slack { cmd: None } => {
-            print_subcommand_help("slack")?;
-        }
-        Command::PagerDuty { cmd: Some(cmd) } => {
-            return pagerduty::run(cmd).await;
-        }
-        Command::PagerDuty { cmd: None } => {
-            print_subcommand_help("pagerduty")?;
-        }
-        Command::Sentry { cmd: Some(cmd) } => {
-            return sentry::run(cmd).await;
-        }
-        Command::Sentry { cmd: None } => {
-            print_subcommand_help("sentry")?;
-        }
         Command::NewRelic { cmd: Some(cmd) } => {
             return newrelic::run(cmd).await;
         }
         Command::NewRelic { cmd: None } => {
             print_subcommand_help("newrelic")?;
-        }
-        Command::Eks { cmd: Some(cmd) } => {
-            return eks::run(cmd).await;
-        }
-        Command::Eks { cmd: None } => {
-            print_subcommand_help("eks")?;
-        }
-        Command::Pipeline { cmd: Some(cmd) } => {
-            return pipeline::run(cmd).await;
-        }
-        Command::Pipeline { cmd: None } => {
-            print_subcommand_help("pipeline")?;
         }
         Command::Utils { cmd: Some(cmd) } => {
             return utils::run_command(cmd).await;
@@ -173,16 +124,12 @@ mod tests {
 
     #[test]
     fn parses_subcommand_without_action() {
-        let cli = Cli::try_parse_from(["hu", "jira"]).unwrap();
-        assert!(matches!(cli.command, Some(Command::Jira { cmd: None })));
+        let cli = Cli::try_parse_from(["hu", "newrelic"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::NewRelic { cmd: None })));
     }
 
     #[test]
     fn parses_command_aliases() {
-        // pd -> pagerduty
-        let cli = Cli::try_parse_from(["hu", "pd", "oncall"]).unwrap();
-        assert!(matches!(cli.command, Some(Command::PagerDuty { .. })));
-
         // nr -> newrelic
         let cli = Cli::try_parse_from(["hu", "nr", "incidents"]).unwrap();
         assert!(matches!(cli.command, Some(Command::NewRelic { .. })));

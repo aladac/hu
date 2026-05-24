@@ -4,19 +4,12 @@ use crate::context::ContextCommand;
 use crate::cron::CronCommand;
 use crate::data::DataCommand;
 use crate::docs::DocsCommand;
-use crate::eks::EksCommand;
-use crate::gh::GhCommand;
 use crate::install::InstallCommand;
-use crate::jira::JiraCommand;
 use crate::mcp::McpCommand;
 use crate::newrelic::NewRelicCommand;
-use crate::pagerduty::PagerDutyCommand;
-use crate::pipeline::PipelineCommand;
 use crate::read::ReadArgs;
-use crate::sentry::SentryCommand;
 use crate::setup::SetupCommand;
 use crate::shell::ShellCommand;
-use crate::slack::SlackCommands;
 use crate::utils::UtilsCommand;
 
 #[derive(Parser)]
@@ -30,54 +23,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Jira operations (tickets, sprint, search)
-    Jira {
-        #[command(subcommand)]
-        cmd: Option<JiraCommand>,
-    },
-
-    /// GitHub operations (prs, runs, failures)
-    Gh {
-        #[command(subcommand)]
-        cmd: Option<GhCommand>,
-    },
-
-    /// Slack operations (messages, channels)
-    Slack {
-        #[command(subcommand)]
-        cmd: Option<SlackCommands>,
-    },
-
-    /// PagerDuty (oncall, alerts)
-    #[command(name = "pagerduty", alias = "pd")]
-    PagerDuty {
-        #[command(subcommand)]
-        cmd: Option<PagerDutyCommand>,
-    },
-
-    /// Sentry (issues, errors)
-    Sentry {
-        #[command(subcommand)]
-        cmd: Option<SentryCommand>,
-    },
-
     /// NewRelic (incidents, queries)
     #[command(name = "newrelic", alias = "nr")]
     NewRelic {
         #[command(subcommand)]
         cmd: Option<NewRelicCommand>,
-    },
-
-    /// EKS pod access (list, exec, logs)
-    Eks {
-        #[command(subcommand)]
-        cmd: Option<EksCommand>,
-    },
-
-    /// CodePipeline status (read-only)
-    Pipeline {
-        #[command(subcommand)]
-        cmd: Option<PipelineCommand>,
     },
 
     /// Utility commands (fetch-html, grep)
